@@ -20,6 +20,10 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
+# Spike1：spawn sidecar + stdio 通信（外部进程管理）
+tauri-plugin-shell = "2"
+# 与 tauri 的 async runtime 同源（broadcast 行分发 + 超时）
+tokio = { version = "1", features = ["sync", "time"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 

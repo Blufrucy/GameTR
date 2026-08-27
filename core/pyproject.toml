@@ -1,0 +1,18 @@
+[project]
+name = "gt-core"
+version = "0.1.0"
+description = "GameTR 核心引擎：stdio JSON-RPC sidecar、项目存储、翻译流水线"
+requires-python = ">=3.11"
+dependencies = [
+  "pydantic>=2.7",
+]
+
+[project.scripts]
+gt-core = "gt_core.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["gt_core"]

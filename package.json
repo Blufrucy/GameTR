@@ -1,0 +1,21 @@
+{
+  "name": "gametr",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "protocol": "node protocol/scripts/generate.mjs",
+    "desktop:dev": "pnpm --filter desktop tauri dev",
+    "desktop:build": "pnpm --filter desktop build",
+    "core:test": "uv run pytest",
+    "core:serve": "uv run gt-core serve",
+    "sidecar:build": "python core/scripts/build_sidecar.py",
+    "lint:core": "uv run ruff check core/gt_core core/tests",
+    "lint:desktop": "pnpm --filter desktop lint"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
+  }
+}

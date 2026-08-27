@@ -1,0 +1,56 @@
+# GameTR Monorepo 共享工程配置（uv workspace 虚拟根）
+#
+# 常规入口（uv 在 PATH 上）：
+#   uv sync          # 在根 .venv 安装 core + 全部开发工具
+#   uv run pytest    # 跑 core 测试
+#   uv run gt-core serve
+# 若 uv 不在 PATH，可用 python -m uv 替代。
+
+[project]
+name = "gametr-workspace"
+version = "0.1.0"
+description = "GameTR Monorepo 虚拟根（承载共享工具配置、开发依赖与 core 可编辑安装）"
+requires-python = ">=3.11"
+dependencies = [
+  "gt-core",
+]
+
+# 让根项目依赖 workspace 成员 core（可编辑安装，保证 import gt_core 生效）
+[tool.uv.sources]
+gt-core = { workspace = true }
+
+[dependency-groups]
+dev = [
+  "pytest>=8",
+  "ruff>=0.11",
+  "mypy>=1.15",
+  "pyinstaller>=6.14",
+  "datamodel-code-generator>=0.25",
+  "pre-commit>=4",
+]
+
+[tool.uv.workspace]
+members = ["core"]
+
+# ---------- ruff ----------
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["core"]
+# 生成物不参与 lint（内容由协议生成器决定）
+extend-exclude = ["core/gt_core/rpc/models.py", "core/gt_core/plugin_manifest.py"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]
+
+# ---------- mypy ----------
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["core/gt_core"]
+
+# ---------- pytest ----------
+[tool.pytest.ini_options]
+testpaths = ["core/tests"]
+addopts = "-q"

@@ -1,0 +1,223 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://gametr.dev/schemas/rpc-methods.json",
+  "title": "GameTR JSON-RPC 方法目录",
+  "description": "全部 RPC 方法的契约目录。这是方法清单（人机可读），生成器只消费 common.json / plugin-manifest.json 的类型定义。协议纪律：方法/字段只加不改不删；破坏性变更升 api_version + 迁移层。",
+  "methods": [
+    {
+      "name": "core.ping",
+      "summary": "健康检查：GUI 启动以 500ms 间隔重试直到成功（M0 Spike1）",
+      "params": {},
+      "result": { "$ref": "common.json#/definitions/PingResult" },
+      "milestone": "M0"
+    },
+    {
+      "name": "core.shutdown",
+      "summary": "优雅退出：置停止标志，主循环下一轮结束",
+      "params": {},
+      "result": { "type": "object", "properties": { "ok": { "type": "boolean" } } },
+      "milestone": "M0"
+    },
+    {
+      "name": "core.log_level",
+      "summary": "读写进程日志级别",
+      "params": { "type": "object", "properties": { "level": { "enum": ["debug", "info", "warn", "error"] } } },
+      "result": { "type": "object", "properties": { "level": { "type": "string" } } },
+      "milestone": "M0"
+    },
+    {
+      "name": "project.create",
+      "summary": "创建项目（SQLite 文件 + 迁移）",
+      "params": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string" },
+          "engine_id": { "type": "string" },
+          "source_path": { "type": "string" }
+        },
+        "required": ["path", "engine_id", "source_path"]
+      },
+      "result": { "type": "object" },
+      "milestone": "M1"
+    },
+    {
+      "name": "project.open",
+      "summary": "打开已有项目",
+      "params": { "type": "object", "properties": { "path": { "type": "string" } }, "required": ["path"] },
+      "result": { "type": "object" },
+      "milestone": "M1"
+    },
+    {
+      "name": "project.close",
+      "summary": "关闭当前项目",
+      "params": {},
+      "result": { "type": "object" },
+      "milestone": "M1"
+    },
+    {
+      "name": "project.stats",
+      "summary": "项目统计（条目数/状态分布）",
+      "params": {},
+      "result": { "type": "object" },
+      "milestone": "M1"
+    },
+    {
+      "name": "entries.list",
+      "summary": "分页查询条目，可按状态/文件过滤",
+      "params": {
+        "type": "object",
+        "properties": {
+          "page": { "type": "integer", "minimum": 1 },
+          "page_size": { "type": "integer", "minimum": 1, "maximum": 2000 },
+          "status": { "$ref": "common.json#/definitions/EntryStatus" },
+          "file_path": { "type": "string" }
+        }
+      },
+      "result": { "type": "object", "description": "分页结果，items 为 Entry[]" },
+      "milestone": "M1"
+    },
+    {
+      "name": "entries.get",
+      "summary": "按 id 取单条",
+      "params": { "type": "object", "properties": { "id": { "type": "string" } }, "required": ["id"] },
+      "result": { "$ref": "common.json#/definitions/Entry" },
+      "milestone": "M1"
+    },
+    {
+      "name": "entries.update",
+      "summary": "更新单条译文/状态",
+      "params": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "translation": { "type": ["string", "null"] },
+          "status": { "$ref": "common.json#/definitions/EntryStatus" }
+        },
+        "required": ["id"]
+      },
+      "result": { "$ref": "common.json#/definitions/Entry" },
+      "milestone": "M1"
+    },
+    {
+      "name": "entries.batch_update_status",
+      "summary": "批量改状态（选中范围全部确认等）",
+      "params": {
+        "type": "object",
+        "properties": {
+          "ids": { "type": "array", "items": { "type": "string" } },
+          "status": { "$ref": "common.json#/definitions/EntryStatus" }
+        },
+        "required": ["ids", "status"]
+      },
+      "result": { "type": "object", "properties": { "updated": { "type": "integer" } } },
+      "milestone": "M1"
+    },
+    {
+      "name": "entries.search",
+      "summary": "FTS 全文搜索（source/translation）",
+      "params": { "type": "object", "properties": { "query": { "type": "string" }, "page": { "type": "integer" } }, "required": ["query"] },
+      "result": { "type": "object" },
+      "milestone": "M1"
+    },
+    {
+      "name": "glossary.list",
+      "summary": "术语表列表",
+      "params": {},
+      "result": { "type": "array", "items": { "type": "object" } },
+      "milestone": "M1"
+    },
+    {
+      "name": "glossary.upsert",
+      "summary": "新增/更新术语",
+      "params": {
+        "type": "object",
+        "properties": {
+          "term": { "type": "string" },
+          "translation": { "type": "string" },
+          "match_case": { "type": "boolean" }
+        },
+        "required": ["term", "translation"]
+      },
+      "result": { "type": "object" },
+      "milestone": "M1"
+    },
+    {
+      "name": "detect.run",
+      "summary": "探测游戏目录引擎（M2）",
+      "params": { "type": "object", "properties": { "dir": { "type": "string" } }, "required": ["dir"] },
+      "result": { "$ref": "common.json#/definitions/DetectResult" },
+      "milestone": "M2"
+    },
+    {
+      "name": "extract.run",
+      "summary": "提取文本条目（M2）",
+      "params": { "type": "object" },
+      "result": { "type": "object", "description": "含条目数、ProgressEvent 通知流" },
+      "milestone": "M2"
+    },
+    {
+      "name": "plugins.list",
+      "summary": "已加载插件列表（M2）",
+      "params": {},
+      "result": { "type": "array", "items": { "type": "object" } },
+      "milestone": "M2"
+    },
+    {
+      "name": "translate.start",
+      "summary": "启动翻译任务（可断点续翻，M3）",
+      "params": { "type": "object" },
+      "result": { "type": "object" },
+      "milestone": "M3"
+    },
+    {
+      "name": "translate.pause",
+      "summary": "暂停翻译任务",
+      "params": {},
+      "result": { "type": "object" },
+      "milestone": "M3"
+    },
+    {
+      "name": "translate.cancel",
+      "summary": "取消翻译任务",
+      "params": {},
+      "result": { "type": "object" },
+      "milestone": "M3"
+    },
+    {
+      "name": "translate.retranslate_entries",
+      "summary": "单条重译，带上下文（M3）",
+      "params": { "type": "object", "properties": { "ids": { "type": "array", "items": { "type": "string" } } }, "required": ["ids"] },
+      "result": { "type": "object" },
+      "milestone": "M3"
+    },
+    {
+      "name": "translate.stats",
+      "summary": "用量统计（token/成本）",
+      "params": {},
+      "result": { "type": "object" },
+      "milestone": "M3"
+    },
+    {
+      "name": "providers.list",
+      "summary": "可用翻译 Provider 列表",
+      "params": {},
+      "result": { "type": "array", "items": { "type": "object" } },
+      "milestone": "M3"
+    },
+    {
+      "name": "providers.test",
+      "summary": "Provider 连通性自检",
+      "params": { "type": "object", "properties": { "provider_id": { "type": "string" } } },
+      "result": { "type": "object" },
+      "milestone": "M3"
+    }
+  ],
+  "error_codes": {
+    "-32700": "PARSE_ERROR：JSON 解析失败",
+    "-32600": "INVALID_REQUEST：不是合法的 JSON-RPC 2.0 请求",
+    "-32601": "METHOD_NOT_FOUND：未知方法",
+    "-32602": "INVALID_PARAMS：参数不符合方法 schema",
+    "-32603": "INTERNAL_ERROR：服务器内部错误",
+    "-32001": "ENGINE_NOT_SUPPORTED：引擎不支持"
+  }
+}

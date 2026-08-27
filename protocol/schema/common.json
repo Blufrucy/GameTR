@@ -1,0 +1,196 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://gametr.dev/schemas/common.json",
+  "definitions": {
+    "EntryStatus": {
+      "title": "EntryStatus",
+      "description": "条目状态机（M1）：1=PENDING 2=MACHINE 3=EDITED 4=CONFIRMED。一键重翻不得覆盖 CONFIRMED。",
+      "type": "integer",
+      "enum": [
+        1,
+        2,
+        3,
+        4
+      ]
+    },
+    "ProjectState": {
+      "title": "ProjectState",
+      "description": "项目生命周期（M1 pipeline.py）：Created→Detecting→Extracted→Translating⇄Reviewing→WritingBack→Done。非法迁移抛异常。",
+      "type": "string",
+      "enum": [
+        "created",
+        "detecting",
+        "extracted",
+        "translating",
+        "reviewing",
+        "writing_back",
+        "done"
+      ]
+    },
+    "DetectResult": {
+      "title": "DetectResult",
+      "description": "detect.run 返回值：引擎识别 + 置信度（M2）。",
+      "type": "object",
+      "properties": {
+        "engine_id": {
+          "type": "string",
+          "description": "引擎标识，如 rpgmv"
+        },
+        "display_name": {
+          "type": "string",
+          "description": "展示名，如 RPG Maker MV/MZ"
+        },
+        "version": {
+          "type": "string",
+          "description": "探测到的引擎版本"
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "0..1 置信度"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "插件自定义附加信息"
+        }
+      },
+      "required": [
+        "engine_id",
+        "display_name",
+        "confidence"
+      ]
+    },
+    "ProgressEvent": {
+      "title": "ProgressEvent",
+      "description": "长任务每批完成发一条 progress 通知（M3）。",
+      "type": "object",
+      "properties": {
+        "task_id": {
+          "type": "string"
+        },
+        "phase": {
+          "type": "string",
+          "description": "extract / translate / write_back"
+        },
+        "done": {
+          "type": "integer"
+        },
+        "total": {
+          "type": "integer"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "task_id",
+        "phase",
+        "done",
+        "total"
+      ]
+    },
+    "PingResult": {
+      "title": "PingResult",
+      "description": "M0 健康检查：GUI 启动时 500ms 间隔重试直到成功。",
+      "type": "object",
+      "properties": {
+        "pong": {
+          "type": "boolean",
+          "const": true
+        },
+        "version": {
+          "type": "string",
+          "description": "核心版本"
+        },
+        "pid": {
+          "type": "integer",
+          "description": "sidecar 进程号"
+        },
+        "ts": {
+          "type": "number",
+          "description": "服务器时间戳（秒）"
+        }
+      },
+      "required": [
+        "pong",
+        "version",
+        "pid",
+        "ts"
+      ]
+    },
+    "Entry": {
+      "title": "Entry",
+      "description": "M1 IR 数据模型。locator 不透明（ADR-0003），核心只存不解析。",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "稳定 ID：sha1(engine_id + locator标准化 + source前256字符)[:16]"
+        },
+        "source": {
+          "type": "string"
+        },
+        "translation": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status": {
+          "$ref": "#/definitions/EntryStatus"
+        },
+        "locator": {
+          "type": "string",
+          "description": "不透明定位串，插件负责生成与解析"
+        },
+        "context_json": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "上下文元信息 JSON 串"
+        },
+        "warnings_json": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "警告列表 JSON 串"
+        },
+        "updated_at": {
+          "type": "number",
+          "description": "更新时间戳（秒）"
+        }
+      },
+      "required": [
+        "id",
+        "source",
+        "status",
+        "locator",
+        "updated_at"
+      ]
+    },
+    "RpcError": {
+      "title": "RpcError",
+      "description": "JSON-RPC error 对象（-32700..-32000，错误码表见 rpc-methods.json）。",
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer"
+        },
+        "message": {
+          "type": "string"
+        },
+        "data": {
+          "description": "可选附加数据"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ]
+    }
+  }
+}

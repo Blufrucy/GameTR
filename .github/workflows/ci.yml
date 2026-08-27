@@ -1,0 +1,101 @@
+# GameTR CI（路线图 1.1）：core / frontend / rust 三 job
+# 平台：Windows（产品 Windows-first）；nightly self-test 任务 M2 后启用
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  # Windows 上 uv 走 PATH
+  UV_CACHE_DIR: ${{ github.workspace }}/.uv-cache
+
+jobs:
+  core:
+    name: core (ruff + mypy + pytest)
+    # M0 验收①：三平台（语言层 job 便宜；Rust/Tauri 是 Windows 产品主目标）
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Sync workspace
+        run: uv sync
+      - name: Lint (ruff)
+        run: uv run ruff check core/gt_core core/tests
+      - name: Type check (mypy)
+        run: uv run mypy
+      - name: Test (pytest)
+        run: uv run pytest
+      - name: Protocol generation is up to date
+        run: |
+          uv run python protocol/scripts/gen_python_models.py
+          git diff --exit-code -- core/gt_core/rpc/models.py core/gt_core/plugin_manifest.py
+
+  frontend:
+    name: frontend (lint + typecheck + test + build)
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: apps/desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Lint (eslint)
+        run: pnpm lint
+      - name: Typecheck (tsc)
+        run: pnpm typecheck
+      - name: Test (vitest)
+        run: pnpm test
+      - name: Build (vite)
+        run: pnpm build
+      - name: Protocol generation is up to date (TS)
+        run: |
+          pnpm exec json2ts --input ../../protocol/schema/common.json --output src/rpc/models.ts --cwd ../.. --unreachableDefinitions
+          pnpm exec json2ts --input ../../protocol/schema/plugin-manifest.json --output src/rpc/plugin-manifest.ts --cwd ../.. --unreachableDefinitions
+          git diff --exit-code -- src/rpc/models.ts src/rpc/plugin-manifest.ts
+
+  rust:
+    name: rust (clippy + test + build)
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: apps/desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - uses: astral-sh/setup-uv@v6
+      - name: Install frontend deps
+        run: pnpm install --frozen-lockfile
+      - name: Build frontend dist (tauri 需要 frontendDist)
+        run: pnpm build
+      - name: Build sidecar binary (externalBin)
+        run: uv run python ../../core/scripts/build_sidecar.py
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+      - name: Clippy
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+      - name: Test
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+      - name: Build (debug)
+        run: cargo build --manifest-path src-tauri/Cargo.toml

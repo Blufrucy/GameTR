@@ -1,0 +1,39 @@
+# ---- Python / uv ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+dist/
+build/
+core/dist/
+core/build/
+core/gt_core.egg-info/
+
+# ---- Node / pnpm ----
+node_modules/
+apps/desktop/dist/
+apps/desktop/.eslintcache
+
+# ---- Rust / Tauri ----
+apps/desktop/src-tauri/target/
+# sidecar 二进制（PyInstaller 构建产物，见 core/scripts/build_sidecar.py）
+apps/desktop/src-tauri/binaries/*.exe
+apps/desktop/src-tauri/binaries/*.dll
+!apps/desktop/src-tauri/binaries/.gitkeep
+
+# ---- OS / IDE ----
+.DS_Store
+Thumbs.db
+.idea/
+*.swp
+.vscode/*
+!.vscode/extensions.json
+
+# ---- 运行时产物（保留目录结构） ----
+logs/
+tests/spikes/spike3_ai/report_*.json
+# Spike2 样本工程可重建（make_sample.py），不入库
+tests/spikes/spike2_rpgmv/sample_game/

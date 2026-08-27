@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://gametr.dev/schemas/plugin-manifest.json",
+  "title": "插件 manifest",
+  "description": "引擎插件清单（M2 插件框架）。api_version 不匹配则拒绝加载并在 RPC 报错。",
+  "type": "object",
+  "properties": {
+    "engine_id": {
+      "type": "string",
+      "description": "引擎标识，如 rpgmv"
+    },
+    "display_name": {
+      "type": "string",
+      "description": "展示名，如 RPG Maker MV/MZ"
+    },
+    "api_version": {
+      "type": "string",
+      "description": "插件 API 版本契约，不匹配拒绝加载"
+    },
+    "version": {
+      "type": "string",
+      "description": "插件版本（semver，独立于主程序）"
+    },
+    "entry": {
+      "type": "string",
+      "description": "适配器入口文件名，如 adapter.py"
+    },
+    "author": {
+      "type": "string"
+    }
+  },
+  "required": ["engine_id", "display_name", "api_version", "version", "entry"]
+}

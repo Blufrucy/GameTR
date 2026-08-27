@@ -1,0 +1,38 @@
+# GameTR pre-commit（路线图 1.1）
+# 安装：uv run pre-commit install
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.11.10
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.15.0
+    hooks:
+      - id: mypy
+        additional_dependencies: [pydantic>=2.7]
+        files: ^core/gt_core/
+
+  # 本地钩子：前端与 Rust 依赖各自工具链，用 system language 直接调
+  - repo: local
+    hooks:
+      - id: tsc
+        name: frontend typecheck
+        entry: pnpm --filter desktop typecheck
+        language: system
+        files: ^apps/desktop/
+        pass_filenames: false
+      - id: eslint
+        name: frontend lint
+        entry: pnpm --filter desktop lint
+        language: system
+        files: ^apps/desktop/
+        pass_filenames: false
+      - id: clippy
+        name: rust clippy
+        entry: cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml -- -D warnings
+        language: system
+        files: ^apps/desktop/src-tauri/
+        pass_filenames: false
