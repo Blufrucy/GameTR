@@ -16,6 +16,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, TextIO
 
+from pydantic import BaseModel, ValidationError
+
 from gt_core.rpc.errors import RpcError, RpcErrorCode
 
 # 方法签名：(params, context) -> result
@@ -23,15 +25,22 @@ Handler = Callable[[dict[str, Any], dict[str, Any]], Any]
 
 
 class MethodRegistry:
-    """方法注册表：方法名 -> 处理器，装饰器注册。"""
+    """方法注册表：方法名 -> 处理器，装饰器注册。
+
+    register(name, schema)：schema 为 pydantic 模型时，进入方法前做参数校验
+    （校验失败 -> INVALID_PARAMS）。校验通过后参数转回 dict 再交给处理器。
+    """
 
     def __init__(self) -> None:
         self._methods: dict[str, Handler] = {}
+        self._schemas: dict[str, type[BaseModel]] = {}
         self._stopped = False
 
-    def register(self, name: str) -> Callable[[Handler], Handler]:
+    def register(self, name: str, schema: type[BaseModel] | None = None) -> Callable[[Handler], Handler]:
         def deco(fn: Handler) -> Handler:
             self._methods[name] = fn
+            if schema is not None:
+                self._schemas[name] = schema
             return fn
 
         return deco
@@ -54,6 +63,14 @@ class MethodRegistry:
         params = req.get("params") or {}
         if not isinstance(params, dict):
             raise RpcError(RpcErrorCode.INVALID_PARAMS, "params 必须为对象")
+        schema = self._schemas.get(method)
+        if schema is not None:
+            try:
+                # 只保留调用方显式提供的字段；未传字段让 handler 用默认
+                params = schema.model_validate(params).model_dump(exclude_unset=True)
+            except ValidationError as exc:
+                detail = "; ".join(f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in exc.errors())
+                raise RpcError(RpcErrorCode.INVALID_PARAMS, f"参数校验失败: {detail}") from exc
         return handler(params, ctx)
 
 
@@ -92,7 +109,11 @@ def serve_stdio(
 
 
 def _process_line(line: str, registry: MethodRegistry, ctx: dict[str, Any]) -> dict[str, Any] | None:
-    """单行请求 -> 响应字典；通知（无 id）返回 None 不应答。纯函数，便于单测。"""
+    """单行请求 -> 响应字典；通知（无 id）返回 None 不应答。纯函数，便于单测。
+
+    注意：通知出错也返回 None（JSON-RPC 2.0 规定「绝不能回复通知」，review
+    修复——此前异常分支无条件回 error，会打乱按 id 配对的响应流）。
+    """
     try:
         req = json.loads(line)
     except json.JSONDecodeError as exc:
@@ -103,8 +124,12 @@ def _process_line(line: str, registry: MethodRegistry, ctx: dict[str, Any]) -> d
     try:
         result = registry.handle(req, ctx)
     except RpcError as exc:
+        if is_notification:
+            return None
         return _error(_req_id(req), exc.code, exc.message, exc.data)
     except Exception as exc:  # noqa: BLE001 — 兜底，避免协议通道被打断
+        if is_notification:
+            return None
         return _error(_req_id(req), RpcErrorCode.INTERNAL_ERROR, f"内部错误: {exc}")
     if is_notification:
         return None

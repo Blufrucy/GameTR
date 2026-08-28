@@ -75,3 +75,47 @@ class RpcError(BaseModel):
     code: int
     message: str
     data: Annotated[Any | None, Field(description='可选附加数据')] = None
+
+
+class GlossaryEntry(BaseModel):
+    id: int
+    term: str
+    translation: str
+    match_case: Annotated[bool | None, Field(description='是否区分大小写匹配')] = None
+
+
+class Page(BaseModel):
+    items: list[Entry]
+    page: int
+    page_size: int
+    total: int
+
+
+class ProjectInfo(BaseModel):
+    path: str
+    engine_id: str
+    source_path: str
+    project_state: ProjectState
+    schema_version: Annotated[
+        int, Field(description='项目文件 schema 版本（meta 表记录）')
+    ]
+    created_at: Annotated[float, Field(description='创建时间戳（秒）')]
+
+
+class ProjectStats(BaseModel):
+    total: int
+    by_status: Annotated[dict[str, int], Field(description='status int -> 计数')]
+
+
+class ExtractResult(BaseModel):
+    engine_id: str
+    extracted_count: int
+    duration_ms: float
+    message: str | None = None
+
+
+class WriteBackResult(BaseModel):
+    output_dir: str
+    written_count: int
+    warning_count: int
+    message: str | None = None

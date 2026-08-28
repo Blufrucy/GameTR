@@ -37,14 +37,14 @@
         },
         "required": ["path", "engine_id", "source_path"]
       },
-      "result": { "type": "object" },
+      "result": { "$ref": "common.json#/definitions/ProjectInfo" },
       "milestone": "M1"
     },
     {
       "name": "project.open",
       "summary": "打开已有项目",
       "params": { "type": "object", "properties": { "path": { "type": "string" } }, "required": ["path"] },
-      "result": { "type": "object" },
+      "result": { "$ref": "common.json#/definitions/ProjectInfo" },
       "milestone": "M1"
     },
     {
@@ -58,7 +58,7 @@
       "name": "project.stats",
       "summary": "项目统计（条目数/状态分布）",
       "params": {},
-      "result": { "type": "object" },
+      "result": { "$ref": "common.json#/definitions/ProjectStats" },
       "milestone": "M1"
     },
     {
@@ -73,7 +73,7 @@
           "file_path": { "type": "string" }
         }
       },
-      "result": { "type": "object", "description": "分页结果，items 为 Entry[]" },
+      "result": { "$ref": "common.json#/definitions/Page" },
       "milestone": "M1"
     },
     {
@@ -115,15 +115,23 @@
     {
       "name": "entries.search",
       "summary": "FTS 全文搜索（source/translation）",
-      "params": { "type": "object", "properties": { "query": { "type": "string" }, "page": { "type": "integer" } }, "required": ["query"] },
-      "result": { "type": "object" },
+      "params": {
+        "type": "object",
+        "properties": {
+          "query": { "type": "string" },
+          "page": { "type": "integer", "minimum": 1 },
+          "page_size": { "type": "integer", "minimum": 1, "maximum": 2000 }
+        },
+        "required": ["query"]
+      },
+      "result": { "$ref": "common.json#/definitions/Page" },
       "milestone": "M1"
     },
     {
       "name": "glossary.list",
       "summary": "术语表列表",
       "params": {},
-      "result": { "type": "array", "items": { "type": "object" } },
+      "result": { "type": "array", "items": { "$ref": "common.json#/definitions/GlossaryEntry" } },
       "milestone": "M1"
     },
     {
@@ -218,6 +226,8 @@
     "-32601": "METHOD_NOT_FOUND：未知方法",
     "-32602": "INVALID_PARAMS：参数不符合方法 schema",
     "-32603": "INTERNAL_ERROR：服务器内部错误",
-    "-32001": "ENGINE_NOT_SUPPORTED：引擎不支持"
+    "-32001": "ENGINE_NOT_SUPPORTED：引擎不支持",
+    "-32002": "NO_PROJECT：未打开项目（需先 project.create / project.open）",
+    "-32003": "PROJECT_ERROR：项目操作失败（文件不存在/已存在/版本不兼容）"
   }
 }

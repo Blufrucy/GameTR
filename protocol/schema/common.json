@@ -191,6 +191,163 @@
         "code",
         "message"
       ]
+    },
+    "GlossaryEntry": {
+      "title": "GlossaryEntry",
+      "description": "术语表条目（M1）。",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer"
+        },
+        "term": {
+          "type": "string"
+        },
+        "translation": {
+          "type": "string"
+        },
+        "match_case": {
+          "type": "boolean",
+          "description": "是否区分大小写匹配"
+        }
+      },
+      "required": [
+        "id",
+        "term",
+        "translation"
+      ]
+    },
+    "Page": {
+      "title": "Page",
+      "description": "通用分页结果（M1）：items 为 Entry[]。",
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Entry"
+          }
+        },
+        "page": {
+          "type": "integer"
+        },
+        "page_size": {
+          "type": "integer"
+        },
+        "total": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "items",
+        "page",
+        "page_size",
+        "total"
+      ]
+    },
+    "ProjectInfo": {
+      "title": "ProjectInfo",
+      "description": "project.create / project.open 返回值（M1）。",
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "engine_id": {
+          "type": "string"
+        },
+        "source_path": {
+          "type": "string"
+        },
+        "project_state": {
+          "$ref": "#/definitions/ProjectState"
+        },
+        "schema_version": {
+          "type": "integer",
+          "description": "项目文件 schema 版本（meta 表记录）"
+        },
+        "created_at": {
+          "type": "number",
+          "description": "创建时间戳（秒）"
+        }
+      },
+      "required": [
+        "path",
+        "engine_id",
+        "source_path",
+        "project_state",
+        "schema_version",
+        "created_at"
+      ]
+    },
+    "ProjectStats": {
+      "title": "ProjectStats",
+      "description": "project.stats 返回值：条目总数 + 状态分布（M1）。",
+      "type": "object",
+      "properties": {
+        "total": {
+          "type": "integer"
+        },
+        "by_status": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "description": "status int -> 计数"
+        }
+      },
+      "required": [
+        "total",
+        "by_status"
+      ]
+    },
+    "ExtractResult": {
+      "title": "ExtractResult",
+      "description": "extract.run 返回值（M2，M1 定义类型）。",
+      "type": "object",
+      "properties": {
+        "engine_id": {
+          "type": "string"
+        },
+        "extracted_count": {
+          "type": "integer"
+        },
+        "duration_ms": {
+          "type": "number"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "engine_id",
+        "extracted_count",
+        "duration_ms"
+      ]
+    },
+    "WriteBackResult": {
+      "title": "WriteBackResult",
+      "description": "write_back 返回值（M2，M1 定义类型）。",
+      "type": "object",
+      "properties": {
+        "output_dir": {
+          "type": "string"
+        },
+        "written_count": {
+          "type": "integer"
+        },
+        "warning_count": {
+          "type": "integer"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "output_dir",
+        "written_count",
+        "warning_count"
+      ]
     }
   }
 }

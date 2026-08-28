@@ -17,8 +17,10 @@ class RpcErrorCode(IntEnum):
     METHOD_NOT_FOUND = -32601
     INVALID_PARAMS = -32602
     INTERNAL_ERROR = -32603
-    # 应用级错误码（-32000 区间，逐步补充）
+    # 应用级错误码（-32000 区间，逐步补充；表见 rpc-methods.json）
     ENGINE_NOT_SUPPORTED = -32001
+    NO_PROJECT = -32002
+    PROJECT_ERROR = -32003
 
 
 class RpcError(Exception):

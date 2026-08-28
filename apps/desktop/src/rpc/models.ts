@@ -143,3 +143,95 @@ export interface RpcError {
   };
   [k: string]: unknown;
 }
+/**
+ * 术语表条目（M1）。
+ *
+ * This interface was referenced by `HttpsGametrDevSchemasCommonJson`'s JSON-Schema
+ * via the `definition` "GlossaryEntry".
+ */
+export interface GlossaryEntry {
+  id: number;
+  term: string;
+  translation: string;
+  /**
+   * 是否区分大小写匹配
+   */
+  match_case?: boolean;
+  [k: string]: unknown;
+}
+/**
+ * 通用分页结果（M1）：items 为 Entry[]。
+ *
+ * This interface was referenced by `HttpsGametrDevSchemasCommonJson`'s JSON-Schema
+ * via the `definition` "Page".
+ */
+export interface Page {
+  items: Entry[];
+  page: number;
+  page_size: number;
+  total: number;
+  [k: string]: unknown;
+}
+/**
+ * project.create / project.open 返回值（M1）。
+ *
+ * This interface was referenced by `HttpsGametrDevSchemasCommonJson`'s JSON-Schema
+ * via the `definition` "ProjectInfo".
+ */
+export interface ProjectInfo {
+  path: string;
+  engine_id: string;
+  source_path: string;
+  project_state: ProjectState;
+  /**
+   * 项目文件 schema 版本（meta 表记录）
+   */
+  schema_version: number;
+  /**
+   * 创建时间戳（秒）
+   */
+  created_at: number;
+  [k: string]: unknown;
+}
+/**
+ * project.stats 返回值：条目总数 + 状态分布（M1）。
+ *
+ * This interface was referenced by `HttpsGametrDevSchemasCommonJson`'s JSON-Schema
+ * via the `definition` "ProjectStats".
+ */
+export interface ProjectStats {
+  total: number;
+  /**
+   * status int -> 计数
+   */
+  by_status: {
+    [k: string]: number;
+  };
+  [k: string]: unknown;
+}
+/**
+ * extract.run 返回值（M2，M1 定义类型）。
+ *
+ * This interface was referenced by `HttpsGametrDevSchemasCommonJson`'s JSON-Schema
+ * via the `definition` "ExtractResult".
+ */
+export interface ExtractResult {
+  engine_id: string;
+  extracted_count: number;
+  duration_ms: number;
+  message?: string;
+  [k: string]: unknown;
+}
+/**
+ * write_back 返回值（M2，M1 定义类型）。
+ *
+ * This interface was referenced by `HttpsGametrDevSchemasCommonJson`'s JSON-Schema
+ * via the `definition` "WriteBackResult".
+ */
+export interface WriteBackResult {
+  output_dir: string;
+  written_count: number;
+  warning_count: number;
+  message?: string;
+  [k: string]: unknown;
+}
