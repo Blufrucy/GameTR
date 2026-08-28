@@ -3,9 +3,9 @@
 name: ci
 
 on:
-  push:
-    branches: [main]
-  pull_request:
+  # 2026-08-28 计费锁定导致 runner 不分配，暂时无效化自动触发。
+  # 启用：GitHub Actions 页面手动 Run workflow，或把 push/pull_request 触发加回来。
+  workflow_dispatch:
 
 env:
   # Windows 上 uv 走 PATH

@@ -43,6 +43,7 @@
 - **Spike 3**：占位符保护/还原/破坏检测逻辑自洽（48 条样本）；实测待 API Key
 - sidecar 打包：PyInstaller onefile → `binaries/gt-core-x86_64-pc-windows-msvc.exe`；Tauri dev 下进程名为 `gt-core.exe`
 - **CI 被 GitHub 计费锁定**（2026-08-28）：所有 job runner_id=0（未分配 runner）；本地用 `make ci` 跑全套质量门
+- **CI 已无效化**（2026-08-28）：workflow 触发改为仅 `workflow_dispatch`（手动 Run workflow 即启用），push/PR 不再自动跑
 
 ## 环境注意（Windows 实测）
 
@@ -62,6 +63,6 @@
 
 1. **Spike 3 实测**：配 API Key 跑 `run_batch.py`，把 metrics 填回 ADR-0005
 2. **Spike 2 真实工程验证**：拿真实 MV 工程跑 `roundtrip.py --dir`，回填 ADR-0004
-3. **CI 恢复**：GitHub 计费解锁后 Re-run（runner_id=0 证据在 m0.md）；可选自托管 runner
+3. **CI 启用**：已改为仅 `workflow_dispatch`（.github/workflows/ci.yml）——GitHub 页面手动 Run workflow 即启用；计费解锁后如需自动触发再把 push/pull_request 加回（runner_id=0 证据在 m0.md）
 4. **M2**：插件框架 + RPGMV 适配器（detect/extract/write_back、占位符保护器、黄金样本三测试）
 5. **M1 遗留**：`entries.list` 的 file_path 过滤依赖 context_json（extract 写入），M2 落地时验证
