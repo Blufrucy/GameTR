@@ -88,6 +88,64 @@ class Repo:
             )
         return len(rows)
 
+    def upsert_extracted(self, entries: Iterable[Entry], *, commit: bool = True) -> int:
+        """extract 落库（M2）：已存在的条目只刷新源侧字段。
+
+        只更新 source/locators/context/warnings，**不覆盖 translation/status**：
+        稳定 ID = sha1(engine+locator+source)，同 id 说明原文没变，译文仍有效，
+        重提取（游戏更新后）不得抹掉已翻译/已确认内容。
+        """
+        rows = [_entry_to_row(e) for e in entries]
+        with self._conn:  # 整批一个事务
+            self._conn.executemany(
+                """
+                INSERT INTO entries(id, source, translation, status, locators_json,
+                                    context_json, warnings_json, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                  source = excluded.source,
+                  locators_json = excluded.locators_json,
+                  context_json = excluded.context_json,
+                  warnings_json = excluded.warnings_json
+                """,
+                rows,
+            )
+        return len(rows)
+
+    def upsert_translations(self, entries: Iterable[Entry], *, commit: bool = True,
+                            overwrite_confirmed: bool = False) -> int:
+        """翻译落库（M3）：覆盖 translation、置 MACHINE，**默认跳过 CONFIRMED**。
+
+        与 upsert_extracted 语义相反（镜像）：翻译结果要写 translation/status，
+        但「重翻不覆盖人工确认」纪律必须守（M1 batch_update_status 同样跳 CONFIRMED）。
+
+        并发安全：ON CONFLICT 的 UPDATE 里 WHERE status != 4（CONFIRMED）在**同一条
+        SQL 原子**完成——防「跨协程先查后改」竞态把用户刚确认的内容打回 MACHINE。
+        FTS 由 entries_au trigger 在 translation 变化时自动同步，无需手工维护。
+        返回实际更新的行数（CONFIRMED 跳过的不计入）。
+
+        overwrite_confirmed=True 时去掉守卫（translate.start overwrite 语义，
+        显式重译已确认条目；默认 false 保持纪律）。
+        """
+        guard = "" if overwrite_confirmed else "WHERE status != 4"
+        rows = [_entry_to_row(e) for e in entries]
+        with self._conn:  # 每批一个事务（流水线批边界）
+            cur = self._conn.executemany(
+                f"""
+                INSERT INTO entries(id, source, translation, status, locators_json,
+                                    context_json, warnings_json, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                  translation = excluded.translation,
+                  status = excluded.status,
+                  warnings_json = excluded.warnings_json,
+                  updated_at = excluded.updated_at
+                {guard}
+                """,
+                rows,
+            )
+        return cur.rowcount
+
     def count(self) -> int:
         row = self._conn.execute("SELECT COUNT(*) AS c FROM entries").fetchone()
         return int(row["c"])
@@ -302,6 +360,12 @@ class Repo:
         return GlossaryEntry(
             id=gid, term=term, translation=translation, match_case=match_case
         )
+
+    def glossary_delete(self, term: str) -> int:
+        """删除术语（M4 术语表 CRUD 补齐）。返回删除行数（不存在为 0）。"""
+        with self._conn:
+            cur = self._conn.execute("DELETE FROM glossary WHERE term = ?", (term,))
+        return cur.rowcount
 
     # ---------- stats ----------
 

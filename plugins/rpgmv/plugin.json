@@ -1,0 +1,8 @@
+{
+  "engine_id": "rpgmv",
+  "display_name": "RPG Maker MV/MZ",
+  "api_version": "1.0",
+  "version": "0.1.0",
+  "entry": "adapter.py",
+  "author": "GameTR"
+}

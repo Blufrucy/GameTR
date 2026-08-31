@@ -16,13 +16,13 @@
 
 ```bash
 export OPENAI_API_KEY=sk-...
-# 或任意 OpenAI 兼容端点
-export OPENAI_BASE_URL=https://api.deepseek.com/v1
-export OPENAI_MODEL=deepseek-chat
+# 或任意 OpenAI 兼容端点（DeepSeek 例：2026-07-24 起 deepseek-chat/reasoner 停用，用 v4 新名）
+export OPENAI_BASE_URL=https://api.deepseek.com
+export OPENAI_MODEL=deepseek-v4-flash
 
 python run_batch.py --limit 100                          # 默认（不请求结构化）
-python run_batch.py --limit 100 --response-format json_schema
-python run_batch.py --limit 100 --response-format json_object
+python run_batch.py --limit 100 --response-format json_object   # DeepSeek 支持的模式
+python run_batch.py --limit 100 --response-format json_schema   # 仅 OpenAI 官方等支持 strict schema 的端点
 python run_batch.py --dry-run                            # 无密钥自检
 ```
 

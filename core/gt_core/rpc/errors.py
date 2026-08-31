@@ -21,6 +21,8 @@ class RpcErrorCode(IntEnum):
     ENGINE_NOT_SUPPORTED = -32001
     NO_PROJECT = -32002
     PROJECT_ERROR = -32003
+    PROVIDER_ERROR = -32004
+    TRANSLATE_NOT_RUNNING = -32005
 
 
 class RpcError(Exception):

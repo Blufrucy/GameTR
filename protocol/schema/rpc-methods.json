@@ -48,6 +48,13 @@
       "milestone": "M1"
     },
     {
+      "name": "project.default_path",
+      "summary": "计算项目文件默认路径（~/.gametr/projects/<slug>.sqlite3，前端导入用，避免依赖 Tauri path API）",
+      "params": { "type": "object", "properties": { "dir": { "type": "string" } }, "required": ["dir"] },
+      "result": { "type": "object", "properties": { "path": { "type": "string" } } },
+      "milestone": "M4"
+    },
+    {
       "name": "project.close",
       "summary": "关闭当前项目",
       "params": {},
@@ -158,64 +165,194 @@
     },
     {
       "name": "extract.run",
-      "summary": "提取文本条目（M2）",
+      "summary": "提取文本条目并落库（M2，同步返回；progress 通知留 M3）",
       "params": { "type": "object" },
-      "result": { "type": "object", "description": "含条目数、ProgressEvent 通知流" },
+      "result": { "$ref": "common.json#/definitions/ExtractResult" },
+      "milestone": "M2"
+    },
+    {
+      "name": "write_back.run",
+      "summary": "回写译文到输出目录（M2，同步返回；拷贝游戏 + 字节区间替换）",
+      "params": {
+        "type": "object",
+        "properties": {
+          "output_dir": { "type": "string" }
+        },
+        "required": ["output_dir"]
+      },
+      "result": { "$ref": "common.json#/definitions/WriteBackResult" },
       "milestone": "M2"
     },
     {
       "name": "plugins.list",
       "summary": "已加载插件列表（M2）",
       "params": {},
-      "result": { "type": "array", "items": { "type": "object" } },
+      "result": { "type": "array", "items": { "$ref": "common.json#/definitions/PluginInfo" } },
       "milestone": "M2"
     },
     {
+      "name": "progress",
+      "summary": "服务端→客户端进度通知（M3，JSON-RPC 通知无 id，经单 writer 串行推送）",
+      "params": { "$ref": "common.json#/definitions/ProgressEvent" },
+      "result": null,
+      "direction": "server-to-client",
+      "milestone": "M3"
+    },
+    {
       "name": "translate.start",
-      "summary": "启动翻译任务（可断点续翻，M3）",
-      "params": { "type": "object" },
-      "result": { "type": "object" },
+      "summary": "启动翻译任务（立即返回 task_id，后台跑 + progress 通知 + 断点续翻）",
+      "params": {
+        "type": "object",
+        "properties": {
+          "scope": { "enum": ["all", "selection", "file"] },
+          "ids": { "type": "array", "items": { "type": "string" }, "description": "scope=selection 时选中的条目 id" },
+          "file_path": { "type": "string", "description": "scope=file 时按文件过滤（context_json.file_path）" },
+          "status_filter": { "$ref": "common.json#/definitions/EntryStatus" },
+          "provider_id": { "type": "string" },
+          "model": { "type": "string", "description": "留空用 Provider 默认模型" },
+          "style_id": { "type": "string", "description": "风格预设 ID（留空默认）" },
+          "overwrite_confirmed": { "type": "boolean", "default": false, "description": "重译已确认条目（默认 false，受守卫）" }
+        },
+        "required": ["scope", "provider_id"]
+      },
+      "result": { "$ref": "common.json#/definitions/TranslateTask" },
       "milestone": "M3"
     },
     {
       "name": "translate.pause",
-      "summary": "暂停翻译任务",
-      "params": {},
-      "result": { "type": "object" },
+      "summary": "暂停翻译任务（批边界检查，不影响已完成批次）",
+      "params": { "type": "object", "properties": { "task_id": { "type": "string" } }, "required": ["task_id"] },
+      "result": { "$ref": "common.json#/definitions/TranslateTask" },
+      "milestone": "M3"
+    },
+    {
+      "name": "translate.resume",
+      "summary": "恢复已暂停任务（幂等：running 状态原地保持）",
+      "params": { "type": "object", "properties": { "task_id": { "type": "string" } }, "required": ["task_id"] },
+      "result": { "$ref": "common.json#/definitions/TranslateTask" },
       "milestone": "M3"
     },
     {
       "name": "translate.cancel",
-      "summary": "取消翻译任务",
-      "params": {},
-      "result": { "type": "object" },
+      "summary": "取消翻译任务（已完成批次保留进校对，partial 结果不丢）",
+      "params": { "type": "object", "properties": { "task_id": { "type": "string" } }, "required": ["task_id"] },
+      "result": { "$ref": "common.json#/definitions/TranslateTask" },
+      "milestone": "M3"
+    },
+    {
+      "name": "translate.status",
+      "summary": "查任务状态（sidecar 重启后前端恢复控制台 UI 用；task_id 缺省取最近任务）",
+      "params": { "type": "object", "properties": { "task_id": { "type": "string" } } },
+      "result": { "$ref": "common.json#/definitions/TranslateTask" },
       "milestone": "M3"
     },
     {
       "name": "translate.retranslate_entries",
-      "summary": "单条重译，带上下文（M3）",
-      "params": { "type": "object", "properties": { "ids": { "type": "array", "items": { "type": "string" } } }, "required": ["ids"] },
-      "result": { "type": "object" },
+      "summary": "单条/批量重译（后台任务，立即返回 task_id + progress 通知）",
+      "params": {
+        "type": "object",
+        "properties": {
+          "ids": { "type": "array", "items": { "type": "string" } },
+          "provider_id": { "type": "string" },
+          "model": { "type": "string" },
+          "style_id": { "type": "string" }
+        },
+        "required": ["ids"]
+      },
+      "result": { "type": "object", "properties": { "task_id": { "type": "string" } } },
       "milestone": "M3"
     },
     {
       "name": "translate.stats",
-      "summary": "用量统计（token/成本）",
-      "params": {},
-      "result": { "type": "object" },
+      "summary": "用量统计（token/成本，M4 成本面板）",
+      "params": { "type": "object", "properties": { "task_id": { "type": "string" } } },
+      "result": { "$ref": "common.json#/definitions/TranslateStats" },
       "milestone": "M3"
     },
     {
+      "name": "translate.export",
+      "summary": "导出翻译文件到指定路径（同款游戏用户导入复用，免重复翻译）",
+      "params": { "type": "object", "properties": { "path": { "type": "string" } }, "required": ["path"] },
+      "result": { "type": "object", "properties": { "path": { "type": "string" }, "count": { "type": "integer" } } },
+      "milestone": "M4"
+    },
+    {
+      "name": "translate.import",
+      "summary": "从翻译文件导入译文（按 locator 匹配，同款游戏免重复翻译）",
+      "params": { "type": "object", "properties": { "path": { "type": "string" } }, "required": ["path"] },
+      "result": {
+        "type": "object",
+        "properties": {
+          "imported": { "type": "integer" },
+          "skipped": { "type": "integer" },
+          "warnings": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "milestone": "M4"
+    },
+    {
       "name": "providers.list",
-      "summary": "可用翻译 Provider 列表",
+      "summary": "可用翻译 Provider 列表（Provider 选择器渲染用）",
       "params": {},
-      "result": { "type": "array", "items": { "type": "object" } },
+      "result": { "type": "array", "items": { "$ref": "common.json#/definitions/ProviderInfo" } },
       "milestone": "M3"
     },
     {
       "name": "providers.test",
-      "summary": "Provider 连通性自检",
-      "params": { "type": "object", "properties": { "provider_id": { "type": "string" } } },
+      "summary": "Provider 连通性自检（密钥可选覆盖，仅此方法允许带 api_key）",
+      "params": {
+        "type": "object",
+        "properties": {
+          "provider_id": { "type": "string" },
+          "model": { "type": "string" },
+          "api_key": { "type": "string", "description": "可选覆盖；规范路径是环境变量注入" }
+        },
+        "required": ["provider_id"]
+      },
+      "result": { "$ref": "common.json#/definitions/ProviderTestResult" },
+      "milestone": "M3"
+    },
+    {
+      "name": "providers.configure",
+      "summary": "接入/更新真实 Provider（DeepSeek/OpenAI/自定义 base_url + 模型 + key，持久化 ~/.gametr/providers.json）",
+      "params": {
+        "type": "object",
+        "properties": {
+          "provider_id": { "type": "string" },
+          "base_url": { "type": "string" },
+          "display_name": { "type": "string" },
+          "models": { "type": "array", "items": { "type": "string" } },
+          "api_key": { "type": "string", "description": "可选；持久化明文，RPC 日志脱敏" }
+        },
+        "required": ["provider_id", "base_url"]
+      },
+      "result": { "$ref": "common.json#/definitions/ProviderInfo" },
+      "milestone": "M4"
+    },
+    {
+      "name": "providers.models",
+      "summary": "获取 Provider 可用模型列表（GET /models，UI「获取模型」按钮自动填充）",
+      "params": {
+        "type": "object",
+        "properties": {
+          "provider_id": { "type": "string" },
+          "api_key": { "type": "string", "description": "可选覆盖" }
+        },
+        "required": ["provider_id"]
+      },
+      "result": {
+        "type": "object",
+        "properties": {
+          "provider_id": { "type": "string" },
+          "models": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "milestone": "M4"
+    },
+    {
+      "name": "glossary.delete",
+      "summary": "删除术语（M4 术语表 CRUD 补齐）",
+      "params": { "type": "object", "properties": { "term": { "type": "string" } }, "required": ["term"] },
       "result": { "type": "object" },
       "milestone": "M3"
     }
@@ -228,6 +365,8 @@
     "-32603": "INTERNAL_ERROR：服务器内部错误",
     "-32001": "ENGINE_NOT_SUPPORTED：引擎不支持",
     "-32002": "NO_PROJECT：未打开项目（需先 project.create / project.open）",
-    "-32003": "PROJECT_ERROR：项目操作失败（文件不存在/已存在/版本不兼容）"
+    "-32003": "PROJECT_ERROR：项目操作失败（文件不存在/已存在/版本不兼容）",
+    "-32004": "PROVIDER_ERROR：Provider 调用失败（网络/鉴权/模型错误）",
+    "-32005": "TRANSLATE_NOT_RUNNING：无运行中的翻译任务（pause/cancel/status 无目标）"
   }
 }

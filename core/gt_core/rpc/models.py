@@ -38,12 +38,31 @@ class DetectResult(BaseModel):
     ] = None
 
 
+class Status(StrEnum):
+    running = 'running'
+    paused = 'paused'
+    cancelled = 'cancelled'
+    done = 'done'
+    error = 'error'
+
+
 class ProgressEvent(BaseModel):
     task_id: str
     phase: Annotated[str, Field(description='extract / translate / write_back')]
     done: int
     total: int
     message: str | None = None
+    ts: Annotated[float | None, Field(description='事件时间戳（秒）')] = None
+    status: Annotated[
+        Status | None,
+        Field(
+            description='任务生命周期：running/paused/cancelled/done/error（终态也要发一条）'
+        ),
+    ] = None
+    skipped: Annotated[
+        int | None,
+        Field(description='续翻/缓存命中已跳过的条数（前端进度条从非零起步）'),
+    ] = None
 
 
 class PingResult(BaseModel):
@@ -118,4 +137,81 @@ class WriteBackResult(BaseModel):
     output_dir: str
     written_count: int
     warning_count: int
+    message: str | None = None
+
+
+class PluginInfo(BaseModel):
+    engine_id: Annotated[str, Field(description='引擎标识，如 rpgmv')]
+    display_name: Annotated[str, Field(description='展示名，如 RPG Maker MV/MZ')]
+    version: Annotated[str, Field(description='插件版本（semver）')]
+    api_version: Annotated[str, Field(description='插件 API 版本契约')]
+    entry: Annotated[str, Field(description='适配器入口文件名，如 adapter.py')]
+    loaded: Annotated[bool, Field(description='是否加载成功并可用（契约测试通过）')]
+    error: Annotated[
+        str | None, Field(description='加载失败原因；loaded=false 时有值')
+    ] = None
+    features: Annotated[
+        list[str] | None,
+        Field(
+            description='插件可选能力列表（feature-detect）：如 protect=占位符保护器'
+        ),
+    ] = None
+
+
+class TranslateStatus(StrEnum):
+    running = 'running'
+    paused = 'paused'
+    cancelled = 'cancelled'
+    done = 'done'
+    error = 'error'
+
+
+class TranslateTask(BaseModel):
+    task_id: str
+    status: TranslateStatus
+    provider_id: str
+    model: str
+    style_id: Annotated[
+        str | None, Field(description='风格预设 ID（null=默认风格）')
+    ] = None
+    glossary_version: Annotated[
+        str | None, Field(description='任务启动时的术语表内容哈希（参与 cache_key）')
+    ] = None
+    total: int
+    done: int
+    error: str | None = None
+    created_at: float
+    updated_at: float
+
+
+class TranslateStats(BaseModel):
+    task_id: str
+    provider_id: str
+    model: str
+    tokens_in: int
+    tokens_out: int
+    estimated_cost: float
+    currency: str | None = None
+
+
+class ProviderInfo(BaseModel):
+    provider_id: str
+    display_name: str
+    models: Annotated[list[str], Field(description='可用模型列表（模型下拉框）')]
+    needs_api_key: Annotated[
+        bool,
+        Field(description='是否需要密钥（MockProvider=false，前端据此显示密钥输入框）'),
+    ]
+    supports_structured: Annotated[
+        bool, Field(description='是否支持 response_format json_schema strict')
+    ]
+    base_url: Annotated[
+        str | None, Field(description='OpenAI 兼容端点 base_url（可配置项）')
+    ] = None
+
+
+class ProviderTestResult(BaseModel):
+    provider_id: str
+    ok: bool
+    latency_ms: float | None = None
     message: str | None = None

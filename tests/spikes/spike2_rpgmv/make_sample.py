@@ -1,15 +1,14 @@
 #!/usr/bin/env python
-"""程序化生成最小 RPG Maker MV 样本工程（版权干净、可重建）。
+"""程序化生成最小 RPG Maker 样本工程（版权干净、可重建）。
 
-生成结构（模拟 MV 编辑器的数据文件）：
+生成结构（对齐真实 MZ 工程 oriontest / rmmz 1.9.0）：
   www/data/Map001.json   一张地图 + 对话事件（101/401）、选项（102/402）、滚动文字（405）
   www/data/Actors.json    角色（name/note）
   www/data/Items.json     物品（name/description/note）
   www/data/System.json    部分字段（terms 含 commandNames 等）
 
-写盘格式：假定的 MV 编辑器格式 = JSON.stringify(obj, null, 2) 等价物，
-即 json.dumps(data, ensure_ascii=False, indent=2)（2空格缩进、不转义非ASCII、插入序 key）。
-真实 MV 工程是否与此一致由 roundtrip.py 的参数搜索验证。
+写盘格式 = serialize_rpgm（roundtrip.py，2026-08-28 真实 MZ 工程验证的唯一正确实现）：
+JS 紧凑序列化 + "数组含 null 元素则逐元素展开"换行装饰。见 ADR-0004。
 
 用法：python make_sample.py --out <输出目录>
 """
@@ -17,24 +16,23 @@
 from __future__ import annotations
 
 import argparse
-import json
 from pathlib import Path
 
-
-def _dumps(data: object) -> str:
-    """MV 假定格式写盘。"""
-    return json.dumps(data, ensure_ascii=False, indent=2)
+from roundtrip import serialize_rpgm
 
 
 def _write(root: Path, rel: str, data: object) -> None:
     p = root / rel
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(_dumps(data), encoding="utf-8", newline="\n")
+    # newline='' 防 Windows 把 \n 翻译成 \r\n（字节保真前提）
+    p.write_text(serialize_rpgm(data), encoding="utf-8", newline="")
 
 
 def _map_json() -> dict:
-    """最小地图：1 张，含一条对话事件（含连续401拼接、选项、滚动文字）。"""
-    data_rows = [[0] * 20 for _ in range(15)]
+    """最小地图：1 张，含一条对话事件（含连续401拼接、选项、滚动文字）。
+
+    结构对齐真实 MZ：events 数组索引 0 为 null（事件从 1 起），data 一维数组（width*height）。
+    """
     return {
         "autoplayBgm": False,
         "autoplayBgs": False,
@@ -47,6 +45,7 @@ def _map_json() -> dict:
         "encounterList": [],
         "encounterStep": 2,
         "events": [
+            None,  # 索引 0 占位（真实 MZ 约定）
             {
                 "id": 1,
                 "name": "Event1",
@@ -113,7 +112,7 @@ def _map_json() -> dict:
         "specifiedBattleback": False,
         "tilesetId": 1,
         "width": 20,
-        "data": data_rows,
+        "data": [0] * (20 * 15),  # 一维 tile 数组（真实 MZ 是 width*height 一维）
     }
 
 

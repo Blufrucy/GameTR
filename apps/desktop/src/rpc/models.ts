@@ -20,6 +20,13 @@ export type EntryStatus = 1 | 2 | 3 | 4;
  */
 export type ProjectState =
   "created" | "detecting" | "extracted" | "translating" | "reviewing" | "writing_back" | "done";
+/**
+ * 翻译任务生命周期（M3，任务表细粒度，不进项目状态机）。
+ *
+ * This interface was referenced by `HttpsGametrDevSchemasCommonJson`'s JSON-Schema
+ * via the `definition` "TranslateStatus".
+ */
+export type TranslateStatus = "running" | "paused" | "cancelled" | "done" | "error";
 
 export interface HttpsGametrDevSchemasCommonJson {
   [k: string]: unknown;
@@ -56,7 +63,7 @@ export interface DetectResult {
   [k: string]: unknown;
 }
 /**
- * 长任务每批完成发一条 progress 通知（M3）。
+ * 长任务进度通知（M3 起服务端推送，JSON-RPC 通知无 id）。progress 一个方法覆盖全部任务生命周期（看 status 区分）。
  *
  * This interface was referenced by `HttpsGametrDevSchemasCommonJson`'s JSON-Schema
  * via the `definition` "ProgressEvent".
@@ -69,7 +76,19 @@ export interface ProgressEvent {
   phase: string;
   done: number;
   total: number;
-  message?: string;
+  message?: string | null;
+  /**
+   * 事件时间戳（秒）
+   */
+  ts?: number;
+  /**
+   * 任务生命周期：running/paused/cancelled/done/error（终态也要发一条）
+   */
+  status?: "running" | "paused" | "cancelled" | "done" | "error";
+  /**
+   * 续翻/缓存命中已跳过的条数（前端进度条从非零起步）
+   */
+  skipped?: number;
   [k: string]: unknown;
 }
 /**
@@ -233,5 +252,128 @@ export interface WriteBackResult {
   written_count: number;
   warning_count: number;
   message?: string;
+  [k: string]: unknown;
+}
+/**
+ * plugins.list 返回值：已加载插件信息（含 disabled 状态与失败原因，M2）。
+ *
+ * This interface was referenced by `HttpsGametrDevSchemasCommonJson`'s JSON-Schema
+ * via the `definition` "PluginInfo".
+ */
+export interface PluginInfo {
+  /**
+   * 引擎标识，如 rpgmv
+   */
+  engine_id: string;
+  /**
+   * 展示名，如 RPG Maker MV/MZ
+   */
+  display_name: string;
+  /**
+   * 插件版本（semver）
+   */
+  version: string;
+  /**
+   * 插件 API 版本契约
+   */
+  api_version: string;
+  /**
+   * 适配器入口文件名，如 adapter.py
+   */
+  entry: string;
+  /**
+   * 是否加载成功并可用（契约测试通过）
+   */
+  loaded: boolean;
+  /**
+   * 加载失败原因；loaded=false 时有值
+   */
+  error?: string | null;
+  /**
+   * 插件可选能力列表（feature-detect）：如 protect=占位符保护器
+   */
+  features?: string[];
+  [k: string]: unknown;
+}
+/**
+ * 翻译任务状态（translate.start/status 返回值，M3）。
+ *
+ * This interface was referenced by `HttpsGametrDevSchemasCommonJson`'s JSON-Schema
+ * via the `definition` "TranslateTask".
+ */
+export interface TranslateTask {
+  task_id: string;
+  status: TranslateStatus;
+  provider_id: string;
+  model: string;
+  /**
+   * 风格预设 ID（null=默认风格）
+   */
+  style_id?: string | null;
+  /**
+   * 任务启动时的术语表内容哈希（参与 cache_key）
+   */
+  glossary_version?: string;
+  total: number;
+  done: number;
+  error?: string | null;
+  created_at: number;
+  updated_at: number;
+  [k: string]: unknown;
+}
+/**
+ * 翻译用量统计（translate.stats 返回值，M4 成本面板）。
+ *
+ * This interface was referenced by `HttpsGametrDevSchemasCommonJson`'s JSON-Schema
+ * via the `definition` "TranslateStats".
+ */
+export interface TranslateStats {
+  task_id: string;
+  provider_id: string;
+  model: string;
+  tokens_in: number;
+  tokens_out: number;
+  estimated_cost: number;
+  currency?: string;
+  [k: string]: unknown;
+}
+/**
+ * providers.list 返回值：Provider 选择器渲染所需（M3）。
+ *
+ * This interface was referenced by `HttpsGametrDevSchemasCommonJson`'s JSON-Schema
+ * via the `definition` "ProviderInfo".
+ */
+export interface ProviderInfo {
+  provider_id: string;
+  display_name: string;
+  /**
+   * 可用模型列表（模型下拉框）
+   */
+  models: string[];
+  /**
+   * 是否需要密钥（MockProvider=false，前端据此显示密钥输入框）
+   */
+  needs_api_key: boolean;
+  /**
+   * 是否支持 response_format json_schema strict
+   */
+  supports_structured: boolean;
+  /**
+   * OpenAI 兼容端点 base_url（可配置项）
+   */
+  base_url?: string;
+  [k: string]: unknown;
+}
+/**
+ * providers.test 返回值：连通性自检。
+ *
+ * This interface was referenced by `HttpsGametrDevSchemasCommonJson`'s JSON-Schema
+ * via the `definition` "ProviderTestResult".
+ */
+export interface ProviderTestResult {
+  provider_id: string;
+  ok: boolean;
+  latency_ms?: number;
+  message?: string | null;
   [k: string]: unknown;
 }

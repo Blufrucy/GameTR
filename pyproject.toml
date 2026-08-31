@@ -53,5 +53,5 @@ files = ["core/gt_core"]
 
 # ---------- pytest ----------
 [tool.pytest.ini_options]
-testpaths = ["core/tests"]
+testpaths = ["core/tests", "tests/golden/rpgmv"]
 addopts = "-q"

@@ -37,6 +37,10 @@ Thumbs.db
 
 # ---- 运行时产物（保留目录结构） ----
 logs/
-tests/spikes/spike3_ai/report_*.json
+# .env 可能含 API key，一律不入库
+.env
+tests/spikes/spike3_ai/report*.json
 # Spike2 样本工程可重建（make_sample.py），不入库
 tests/spikes/spike2_rpgmv/sample_game/
+# 黄金样本工程可重建（make_sample.py generate），不入库
+tests/golden/rpgmv/sample/

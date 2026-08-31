@@ -8,11 +8,16 @@
 
 只依赖标准库（urllib），无第三方依赖。
 
-配置（环境变量）：
+配置（环境变量，.env 同字段，环境变量优先）：
   OPENAI_BASE_URL          默认 https://api.openai.com/v1（OpenAI 兼容端点）
-  OPENAI_API_KEY           必填（--dry-run 除外）
+  OPENAI_API_KEY           必填（--dry-run 除外；也接受 DEEPSEEK_API_KEY）
   OPENAI_MODEL             默认 gpt-4o-mini
   OPENAI_RESPONSE_FORMAT   可选 json_schema | json_object | 空（不请求结构化）
+
+实测注意（2026-08 DeepSeek 文档）：
+  - 模型名 deepseek-chat/deepseek-reasoner 已停用，改用 deepseek-v4-flash（非思考）/ deepseek-v4-pro（思考）
+  - base_url https://api.deepseek.com，无需 /v1
+  - DeepSeek 只支持 response_format json_object，不支持 json_schema strict
 
 用法：
   python run_batch.py --limit 100                          # 默认配置跑 100 条
@@ -73,6 +78,8 @@ def build_payload(model: str, system: str, user: str, resp_format: str | None) -
             {"role": "system", "content": system},
             {"role": "user", "content": user},
         ],
+        # json_object 模式下官方要求设 max_tokens 防截断（截断=非法 JSON）
+        "max_tokens": 4096,
     }
     if resp_format == "json_schema":
         payload["response_format"] = {
@@ -174,6 +181,23 @@ def extract_translations(content: str, requested_ids: set[str]) -> tuple[dict[st
 
 # ---------- 主流程 ----------
 
+def _load_env_file(path: Path) -> None:
+    """把 .env 加载进 os.environ（仅设置未已存在的变量）。
+
+    Windows 下临时 export 麻烦，放 .env 一劳永逸；真实环境变量优先于 .env。
+    key 敏感信息只放 .env（已 gitignore），不进 git。
+    """
+    if not path.exists():
+        return
+    for line in path.read_text("utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, _, v = line.partition("=")
+        if k.strip():
+            os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="AI 结构化输出可靠性测试（Spike 3）")
     parser.add_argument("--limit", type=int, default=100, help="测试条目数上限")
@@ -184,7 +208,8 @@ def main() -> None:
     parser.add_argument("--timeout", type=int, default=120, help="单请求超时（秒）")
     args = parser.parse_args()
 
-    api_key = os.environ.get("OPENAI_API_KEY", "")
+    _load_env_file(HERE / ".env")  # 先加载 .env，让环境变量优先
+    api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("DEEPSEEK_API_KEY", "")
     base_url = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
     model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
     resp_format = args.response_format or os.environ.get("OPENAI_RESPONSE_FORMAT") or None

@@ -5,6 +5,7 @@ description = "GameTR 核心引擎：stdio JSON-RPC sidecar、项目存储、翻
 requires-python = ">=3.11"
 dependencies = [
   "pydantic>=2.7",
+  "httpx>=0.27",
 ]
 
 [project.scripts]

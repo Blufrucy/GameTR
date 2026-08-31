@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from gt_core.rpc.models import EntryStatus
@@ -30,6 +32,13 @@ class ProjectCreateParams(BaseModel):
 class ProjectOpenParams(BaseModel):
     model_config = _STRICT
     path: str
+
+
+class ProjectDefaultPathParams(BaseModel):
+    """project.default_path：按游戏目录算默认项目文件路径（前端导入用）。"""
+
+    model_config = _STRICT
+    dir: str
 
 
 # ---------- entries.* ----------
@@ -85,3 +94,113 @@ class GlossaryUpsertParams(BaseModel):
     term: str
     translation: str
     match_case: bool = False
+
+
+# ---------- M2：detect / extract / write_back（插件框架） ----------
+
+class DetectRunParams(BaseModel):
+    model_config = _STRICT
+    dir: str
+
+
+class ExtractRunParams(BaseModel):
+    """extract.run 无参数：source_path 来自当前项目的 meta（协议 params:{}）。"""
+
+    model_config = _STRICT
+
+
+class WriteBackRunParams(BaseModel):
+    model_config = _STRICT
+    output_dir: str
+
+
+# ---------- M3：providers（Provider 层） ----------
+
+class ProviderTestParams(BaseModel):
+    model_config = _STRICT
+    provider_id: str
+    model: str | None = None
+    api_key: str | None = None  # 可选覆盖；规范路径是环境变量注入（RPC 日志已脱敏）
+    base_url: str | None = None  # 传入 = 测试未保存的临时配置（UI 保存前）
+
+
+class ProviderModelsParams(BaseModel):
+    """providers.models：获取 Provider 可用模型列表（UI「获取模型」按钮）。"""
+
+    model_config = _STRICT
+    provider_id: str
+    api_key: str | None = None
+    base_url: str | None = None  # 传入 = 用临时配置拉模型（UI 保存前）
+
+
+class ProviderConfigureParams(BaseModel):
+    """providers.configure：接入真实 Provider（DeepSeek/OpenAI/自定义）。
+
+    api_key 持久化到 ~/.gametr/providers.json（明文，MVP）；正式版 OS keyring。
+    RPC 日志对 api_key 字段脱敏（server.py _RpcLogger）。
+    """
+
+    model_config = _STRICT
+    provider_id: str
+    base_url: str
+    display_name: str | None = None
+    models: list[str] | None = None
+    api_key: str | None = None
+
+
+# ---------- M3：translate（任务管理） ----------
+
+class TranslateStartParams(BaseModel):
+    model_config = _STRICT
+    scope: Literal["all", "selection", "file"]
+    ids: list[str] | None = None
+    file_path: str | None = None
+    status_filter: EntryStatus | None = None
+    provider_id: str
+    model: str | None = None
+    style_id: str | None = None
+    overwrite_confirmed: bool = False  # 重译已确认条目（默认 false，受守卫）
+
+
+class TranslateTaskParams(BaseModel):
+    """pause/resume/cancel/status 共用：{task_id}。"""
+
+    model_config = _STRICT
+    task_id: str
+
+
+class TranslateStatsParams(BaseModel):
+    model_config = _STRICT
+    task_id: str | None = None  # 缺省取最近任务
+
+
+class TranslateStatusParams(BaseModel):
+    model_config = _STRICT
+    task_id: str | None = None  # 缺省取最近任务（sidecar 重启后前端恢复）
+
+
+class TranslateRetranslateParams(BaseModel):
+    model_config = _STRICT
+    ids: list[str]
+    provider_id: str | None = None
+    model: str | None = None
+    style_id: str | None = None
+
+
+class GlossaryDeleteParams(BaseModel):
+    model_config = _STRICT
+    term: str
+
+
+class TranslateExportParams(BaseModel):
+    """translate.export：导出翻译文件到指定路径（同款游戏用户导入复用）。"""
+
+    model_config = _STRICT
+    path: str
+
+
+class TranslateImportParams(BaseModel):
+    """translate.import：从翻译文件导入译文（按 locator 匹配）。"""
+
+    model_config = _STRICT
+    path: str

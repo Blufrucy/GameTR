@@ -35,7 +35,15 @@ _PROJECT_TRANSITIONS: frozenset[tuple[ProjectState, ProjectState]] = frozenset(
         (ProjectState.reviewing, ProjectState.translating),
         (ProjectState.reviewing, ProjectState.writing_back),
         (ProjectState.translating, ProjectState.writing_back),
+        # M2：人工在校对器里翻完（不经 AI 流水线）可直接回写——合法路径
+        (ProjectState.extracted, ProjectState.writing_back),
         (ProjectState.writing_back, ProjectState.done),
+        # M4 重导重置：extract 是幂等操作（默认项目路径固定，重导同一游戏会 open 旧项目），
+        # 已提取/已翻译/已回写的项目可重新提取重置回 extracted
+        (ProjectState.done, ProjectState.extracted),
+        (ProjectState.translating, ProjectState.extracted),
+        (ProjectState.reviewing, ProjectState.extracted),
+        (ProjectState.writing_back, ProjectState.extracted),
     }
 )
 

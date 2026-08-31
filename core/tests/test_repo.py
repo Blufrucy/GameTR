@@ -236,7 +236,7 @@ class TestPersistReopen:
     def test_info_metadata(self, project):
         info = project.info()
         assert info.engine_id == "rpgmv"
-        assert info.schema_version == 1
+        assert info.schema_version == 2
         assert info.project_state.value == "created"
 
     def test_create_existing_raises(self, project):

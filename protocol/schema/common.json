@@ -64,7 +64,7 @@
     },
     "ProgressEvent": {
       "title": "ProgressEvent",
-      "description": "长任务每批完成发一条 progress 通知（M3）。",
+      "description": "长任务进度通知（M3 起服务端推送，JSON-RPC 通知无 id）。progress 一个方法覆盖全部任务生命周期（看 status 区分）。",
       "type": "object",
       "properties": {
         "task_id": {
@@ -81,7 +81,29 @@
           "type": "integer"
         },
         "message": {
-          "type": "string"
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ts": {
+          "type": "number",
+          "description": "事件时间戳（秒）"
+        },
+        "status": {
+          "type": "string",
+          "description": "任务生命周期：running/paused/cancelled/done/error（终态也要发一条）",
+          "enum": [
+            "running",
+            "paused",
+            "cancelled",
+            "done",
+            "error"
+          ]
+        },
+        "skipped": {
+          "type": "integer",
+          "description": "续翻/缓存命中已跳过的条数（前端进度条从非零起步）"
         }
       },
       "required": [
@@ -347,6 +369,230 @@
         "output_dir",
         "written_count",
         "warning_count"
+      ]
+    },
+    "PluginInfo": {
+      "title": "PluginInfo",
+      "description": "plugins.list 返回值：已加载插件信息（含 disabled 状态与失败原因，M2）。",
+      "type": "object",
+      "properties": {
+        "engine_id": {
+          "type": "string",
+          "description": "引擎标识，如 rpgmv"
+        },
+        "display_name": {
+          "type": "string",
+          "description": "展示名，如 RPG Maker MV/MZ"
+        },
+        "version": {
+          "type": "string",
+          "description": "插件版本（semver）"
+        },
+        "api_version": {
+          "type": "string",
+          "description": "插件 API 版本契约"
+        },
+        "entry": {
+          "type": "string",
+          "description": "适配器入口文件名，如 adapter.py"
+        },
+        "loaded": {
+          "type": "boolean",
+          "description": "是否加载成功并可用（契约测试通过）"
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "加载失败原因；loaded=false 时有值"
+        },
+        "features": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "插件可选能力列表（feature-detect）：如 protect=占位符保护器"
+        }
+      },
+      "required": [
+        "engine_id",
+        "display_name",
+        "version",
+        "api_version",
+        "entry",
+        "loaded"
+      ]
+    },
+    "TranslateStatus": {
+      "title": "TranslateStatus",
+      "description": "翻译任务生命周期（M3，任务表细粒度，不进项目状态机）。",
+      "type": "string",
+      "enum": [
+        "running",
+        "paused",
+        "cancelled",
+        "done",
+        "error"
+      ]
+    },
+    "TranslateTask": {
+      "title": "TranslateTask",
+      "description": "翻译任务状态（translate.start/status 返回值，M3）。",
+      "type": "object",
+      "properties": {
+        "task_id": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/definitions/TranslateStatus"
+        },
+        "provider_id": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "style_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "风格预设 ID（null=默认风格）"
+        },
+        "glossary_version": {
+          "type": "string",
+          "description": "任务启动时的术语表内容哈希（参与 cache_key）"
+        },
+        "total": {
+          "type": "integer"
+        },
+        "done": {
+          "type": "integer"
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "created_at": {
+          "type": "number"
+        },
+        "updated_at": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "task_id",
+        "status",
+        "provider_id",
+        "model",
+        "total",
+        "done",
+        "created_at",
+        "updated_at"
+      ]
+    },
+    "TranslateStats": {
+      "title": "TranslateStats",
+      "description": "翻译用量统计（translate.stats 返回值，M4 成本面板）。",
+      "type": "object",
+      "properties": {
+        "task_id": {
+          "type": "string"
+        },
+        "provider_id": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "tokens_in": {
+          "type": "integer"
+        },
+        "tokens_out": {
+          "type": "integer"
+        },
+        "estimated_cost": {
+          "type": "number"
+        },
+        "currency": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "task_id",
+        "provider_id",
+        "model",
+        "tokens_in",
+        "tokens_out",
+        "estimated_cost"
+      ]
+    },
+    "ProviderInfo": {
+      "title": "ProviderInfo",
+      "description": "providers.list 返回值：Provider 选择器渲染所需（M3）。",
+      "type": "object",
+      "properties": {
+        "provider_id": {
+          "type": "string"
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "models": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "可用模型列表（模型下拉框）"
+        },
+        "needs_api_key": {
+          "type": "boolean",
+          "description": "是否需要密钥（MockProvider=false，前端据此显示密钥输入框）"
+        },
+        "supports_structured": {
+          "type": "boolean",
+          "description": "是否支持 response_format json_schema strict"
+        },
+        "base_url": {
+          "type": "string",
+          "description": "OpenAI 兼容端点 base_url（可配置项）"
+        }
+      },
+      "required": [
+        "provider_id",
+        "display_name",
+        "models",
+        "needs_api_key",
+        "supports_structured"
+      ]
+    },
+    "ProviderTestResult": {
+      "title": "ProviderTestResult",
+      "description": "providers.test 返回值：连通性自检。",
+      "type": "object",
+      "properties": {
+        "provider_id": {
+          "type": "string"
+        },
+        "ok": {
+          "type": "boolean"
+        },
+        "latency_ms": {
+          "type": "number"
+        },
+        "message": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "provider_id",
+        "ok"
       ]
     }
   }

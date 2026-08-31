@@ -1,0 +1,266 @@
+[
+  {
+    "locator": "Actors.json::$[0].name",
+    "source": "勇者アリス",
+    "context_json": "{\"file_path\": \"www/data/Actors.json\", \"char_ranges\": [[175, 182]], \"segments\": [\"勇者アリス\"], \"order\": 0}",
+    "warnings_json": null
+  },
+  {
+    "locator": "Actors.json::$[0].nickname",
+    "source": "ニック1",
+    "context_json": "{\"file_path\": \"www/data/Actors.json\", \"char_ranges\": [[194, 200]], \"segments\": [\"ニック1\"], \"order\": 1}",
+    "warnings_json": null
+  },
+  {
+    "locator": "Actors.json::$[0].profile",
+    "source": "村で生まれ育った少女。",
+    "context_json": "{\"file_path\": \"www/data/Actors.json\", \"char_ranges\": [[228, 241]], \"segments\": [\"村で生まれ育った少女。\"], \"order\": 2}",
+    "warnings_json": null
+  },
+  {
+    "locator": "Actors.json::$[0].note",
+    "source": "伝説の勇者1。",
+    "context_json": "{\"file_path\": \"www/data/Actors.json\", \"char_ranges\": [[208, 217]], \"segments\": [\"伝説の勇者1。\"], \"order\": 3}",
+    "warnings_json": null
+  },
+  {
+    "locator": "Actors.json::$[1].name",
+    "source": "魔法使いボブ",
+    "context_json": "{\"file_path\": \"www/data/Actors.json\", \"char_ranges\": [[417, 425]], \"segments\": [\"魔法使いボブ\"], \"order\": 4}",
+    "warnings_json": null
+  },
+  {
+    "locator": "Actors.json::$[1].nickname",
+    "source": "ニック2",
+    "context_json": "{\"file_path\": \"www/data/Actors.json\", \"char_ranges\": [[437, 443]], \"segments\": [\"ニック2\"], \"order\": 5}",
+    "warnings_json": null
+  },
+  {
+    "locator": "Actors.json::$[1].profile",
+    "source": "村で生まれ育った少女。",
+    "context_json": "{\"file_path\": \"www/data/Actors.json\", \"char_ranges\": [[471, 484]], \"segments\": [\"村で生まれ育った少女。\"], \"order\": 6}",
+    "warnings_json": null
+  },
+  {
+    "locator": "Actors.json::$[1].note",
+    "source": "伝説の勇者2。",
+    "context_json": "{\"file_path\": \"www/data/Actors.json\", \"char_ranges\": [[451, 460]], \"segments\": [\"伝説の勇者2。\"], \"order\": 7}",
+    "warnings_json": null
+  },
+  {
+    "locator": "Armors.json::$[0].name",
+    "source": "鎧1",
+    "context_json": "{\"file_path\": \"www/data/Armors.json\", \"char_ranges\": [[91, 95]], \"segments\": [\"鎧1\"], \"order\": 0}",
+    "warnings_json": null
+  },
+  {
+    "locator": "Armors.json::$[0].description",
+    "source": "軽い鎧1。",
+    "context_json": "{\"file_path\": \"www/data/Armors.json\", \"char_ranges\": [[35, 42]], \"segments\": [\"軽い鎧1。\"], \"order\": 1}",
+    "warnings_json": null
+  },
+  {
+    "locator": "Enemies.json::$[0].name",
+    "source": "スライム1",
+    "context_json": "{\"file_path\": \"www/data/Enemies.json\", \"char_ranges\": [[163, 170]], \"segments\": [\"スライム1\"], \"order\": 0}",
+    "warnings_json": null
+  },
+  {
+    "locator": "Enemies.json::$[0].note",
+    "source": "弱い敵1。",
+    "context_json": "{\"file_path\": \"www/data/Enemies.json\", \"char_ranges\": [[178, 185]], \"segments\": [\"弱い敵1。\"], \"order\": 1}",
+    "warnings_json": null
+  },
+  {
+    "locator": "Items.json::$[0].name",
+    "source": "回復薬1",
+    "context_json": "{\"file_path\": \"www/data/Items.json\", \"char_ranges\": [[259, 265]], \"segments\": [\"回復薬1\"], \"order\": 0}",
+    "warnings_json": null
+  },
+  {
+    "locator": "Items.json::$[0].description",
+    "source": "HP を 100 回復する。",
+    "context_json": "{\"file_path\": \"www/data/Items.json\", \"char_ranges\": [[136, 152]], \"segments\": [\"HP を 100 回復する。\"], \"order\": 1}",
+    "warnings_json": null
+  },
+  {
+    "locator": "MapInfos.json::$[0].name",
+    "source": "はじまりの村",
+    "context_json": "{\"file_path\": \"www/data/MapInfos.json\", \"char_ranges\": [[33, 41]], \"segments\": [\"はじまりの村\"], \"order\": 0}",
+    "warnings_json": null
+  },
+  {
+    "locator": "MapInfos.json::$[1].name",
+    "source": "ダンジョン",
+    "context_json": "{\"file_path\": \"www/data/MapInfos.json\", \"char_ranges\": [[122, 129]], \"segments\": [\"ダンジョン\"], \"order\": 1}",
+    "warnings_json": null
+  },
+  {
+    "locator": "MapInfos.json::$[1].note",
+    "source": "地下の迷宮。",
+    "context_json": "{\"file_path\": \"www/data/MapInfos.json\", \"char_ranges\": [[137, 145]], \"segments\": [\"地下の迷宮。\"], \"order\": 2}",
+    "warnings_json": null
+  },
+  {
+    "locator": "Skills.json::$[0].name",
+    "source": "ファイア1",
+    "context_json": "{\"file_path\": \"www/data/Skills.json\", \"char_ranges\": [[228, 235]], \"segments\": [\"ファイア1\"], \"order\": 0}",
+    "warnings_json": null
+  },
+  {
+    "locator": "Skills.json::$[0].description",
+    "source": "火を放つ1。",
+    "context_json": "{\"file_path\": \"www/data/Skills.json\", \"char_ranges\": [[118, 126]], \"segments\": [\"火を放つ1。\"], \"order\": 1}",
+    "warnings_json": null
+  },
+  {
+    "locator": "Skills.json::$[0].message1",
+    "source": "{name}は炎を放った1！",
+    "context_json": "{\"file_path\": \"www/data/Skills.json\", \"char_ranges\": [[179, 195]], \"segments\": [\"{name}は炎を放った1！\"], \"order\": 2}",
+    "warnings_json": null
+  },
+  {
+    "locator": "States.json::$[0].name",
+    "source": "毒1",
+    "context_json": "{\"file_path\": \"www/data/States.json\", \"char_ranges\": [[142, 146]], \"segments\": [\"毒1\"], \"order\": 0}",
+    "warnings_json": null
+  },
+  {
+    "locator": "States.json::$[0].message1",
+    "source": "{name}は毒に侵された1！",
+    "context_json": "{\"file_path\": \"www/data/States.json\", \"char_ranges\": [[90, 107]], \"segments\": [\"{name}は毒に侵された1！\"], \"order\": 1}",
+    "warnings_json": null
+  },
+  {
+    "locator": "Weapons.json::$[0].name",
+    "source": "剣1",
+    "context_json": "{\"file_path\": \"www/data/Weapons.json\", \"char_ranges\": [[119, 123]], \"segments\": [\"剣1\"], \"order\": 0}",
+    "warnings_json": null
+  },
+  {
+    "locator": "Weapons.json::$[0].description",
+    "source": "鋭い剣1。",
+    "context_json": "{\"file_path\": \"www/data/Weapons.json\", \"char_ranges\": [[51, 58]], \"segments\": [\"鋭い剣1。\"], \"order\": 1}",
+    "warnings_json": null
+  },
+  {
+    "locator": "System.json::$.gameTitle",
+    "source": "Golden Sample",
+    "context_json": "{\"file_path\": \"www/data/System.json\", \"char_ranges\": [[13, 28]], \"segments\": [\"Golden Sample\"], \"order\": 0}",
+    "warnings_json": null
+  },
+  {
+    "locator": "System.json::$.currencyUnit",
+    "source": "G",
+    "context_json": "{\"file_path\": \"www/data/System.json\", \"char_ranges\": [[44, 47]], \"segments\": [\"G\"], \"order\": 1}",
+    "warnings_json": null
+  },
+  {
+    "locator": "System.json::$.terms.basic[0]",
+    "source": "レベル",
+    "context_json": "{\"file_path\": \"www/data/System.json\", \"char_ranges\": [[66, 71]], \"segments\": [\"レベル\"], \"order\": 2}",
+    "warnings_json": null
+  },
+  {
+    "locator": "System.json::$.terms.basic[1]",
+    "source": "HP",
+    "context_json": "{\"file_path\": \"www/data/System.json\", \"char_ranges\": [[72, 76]], \"segments\": [\"HP\"], \"order\": 3}",
+    "warnings_json": null
+  },
+  {
+    "locator": "System.json::$.terms.basic[2]",
+    "source": "MP",
+    "context_json": "{\"file_path\": \"www/data/System.json\", \"char_ranges\": [[77, 81]], \"segments\": [\"MP\"], \"order\": 4}",
+    "warnings_json": null
+  },
+  {
+    "locator": "System.json::$.terms.basic[3]",
+    "source": "攻撃力",
+    "context_json": "{\"file_path\": \"www/data/System.json\", \"char_ranges\": [[82, 87]], \"segments\": [\"攻撃力\"], \"order\": 5}",
+    "warnings_json": null
+  },
+  {
+    "locator": "System.json::$.terms.commands[0]",
+    "source": "ニューゲーム",
+    "context_json": "{\"file_path\": \"www/data/System.json\", \"char_ranges\": [[101, 109]], \"segments\": [\"ニューゲーム\"], \"order\": 6}",
+    "warnings_json": null
+  },
+  {
+    "locator": "System.json::$.terms.commands[1]",
+    "source": "コンティニュー",
+    "context_json": "{\"file_path\": \"www/data/System.json\", \"char_ranges\": [[110, 119]], \"segments\": [\"コンティニュー\"], \"order\": 7}",
+    "warnings_json": null
+  },
+  {
+    "locator": "System.json::$.terms.commands[2]",
+    "source": "セーブ",
+    "context_json": "{\"file_path\": \"www/data/System.json\", \"char_ranges\": [[120, 125]], \"segments\": [\"セーブ\"], \"order\": 8}",
+    "warnings_json": null
+  },
+  {
+    "locator": "System.json::$.terms.params[0]",
+    "source": "最大HP",
+    "context_json": "{\"file_path\": \"www/data/System.json\", \"char_ranges\": [[137, 143]], \"segments\": [\"最大HP\"], \"order\": 9}",
+    "warnings_json": null
+  },
+  {
+    "locator": "System.json::$.terms.params[1]",
+    "source": "最大MP",
+    "context_json": "{\"file_path\": \"www/data/System.json\", \"char_ranges\": [[144, 150]], \"segments\": [\"最大MP\"], \"order\": 10}",
+    "warnings_json": null
+  },
+  {
+    "locator": "System.json::$.terms.params[2]",
+    "source": "攻撃力",
+    "context_json": "{\"file_path\": \"www/data/System.json\", \"char_ranges\": [[151, 156]], \"segments\": [\"攻撃力\"], \"order\": 11}",
+    "warnings_json": null
+  },
+  {
+    "locator": "System.json::$.terms.messages.battleStart",
+    "source": "戦闘開始！",
+    "context_json": "{\"file_path\": \"www/data/System.json\", \"char_ranges\": [[184, 191]], \"segments\": [\"戦闘開始！\"], \"order\": 12}",
+    "warnings_json": null
+  },
+  {
+    "locator": "System.json::$.terms.messages.escapeSuccess",
+    "source": "逃げ切った。",
+    "context_json": "{\"file_path\": \"www/data/System.json\", \"char_ranges\": [[208, 216]], \"segments\": [\"逃げ切った。\"], \"order\": 13}",
+    "warnings_json": null
+  },
+  {
+    "locator": "Map001.json::$.events[1].pages[0].list[3].parameters[0]",
+    "source": "こんにちは、\\N[1]勇者！\n次の行も同じメッセージ。\\C[2]赤色",
+    "context_json": "{\"file_path\": \"www/data/Map001.json\", \"char_ranges\": [[870, 887], [927, 949]], \"segments\": [\"こんにちは、\\\\N[1]勇者！\", \"次の行も同じメッセージ。\\\\C[2]赤色\"], \"order\": 0}",
+    "warnings_json": null
+  },
+  {
+    "locator": "Map001.json::$.events[1].pages[0].list[5].parameters[0][0]",
+    "source": "はい",
+    "context_json": "{\"file_path\": \"www/data/Map001.json\", \"char_ranges\": [[990, 994]], \"segments\": [\"はい\"], \"order\": 1}",
+    "warnings_json": null
+  },
+  {
+    "locator": "Map001.json::$.events[1].pages[0].list[5].parameters[0][1]",
+    "source": "いいえ",
+    "context_json": "{\"file_path\": \"www/data/Map001.json\", \"char_ranges\": [[995, 1000]], \"segments\": [\"いいえ\"], \"order\": 2}",
+    "warnings_json": null
+  },
+  {
+    "locator": "Map001.json::$.events[1].pages[0].list[6].parameters[0]",
+    "source": "はい",
+    "context_json": "{\"file_path\": \"www/data/Map001.json\", \"char_ranges\": [[1047, 1051]], \"segments\": [\"はい\"], \"order\": 3}",
+    "warnings_json": null
+  },
+  {
+    "locator": "Map001.json::$.events[1].pages[0].list[7].parameters[0]",
+    "source": "いいえ",
+    "context_json": "{\"file_path\": \"www/data/Map001.json\", \"char_ranges\": [[1093, 1098]], \"segments\": [\"いいえ\"], \"order\": 4}",
+    "warnings_json": null
+  },
+  {
+    "locator": "Map001.json::$.events[1].pages[0].list[8].parameters[0]",
+    "source": "スクロールテキスト\\G",
+    "context_json": "{\"file_path\": \"www/data/Map001.json\", \"char_ranges\": [[1140, 1154]], \"segments\": [\"スクロールテキスト\\\\G\"], \"order\": 5}",
+    "warnings_json": null
+  }
+]

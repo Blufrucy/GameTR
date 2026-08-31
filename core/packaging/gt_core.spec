@@ -17,12 +17,18 @@ a = Analysis(
     [str(_root / "gt_core" / "__main__.py")],
     pathex=[str(_root)],
     binaries=[],
-    datas=[],
+    # 数据文件随包：引擎插件（_MEIPASS/plugins）+ SQL 迁移（_MEIPASS/gt_core/project/migrations）
+    datas=[
+        (str(_root.parent / "plugins"), "plugins"),
+        (str(_root / "gt_core" / "project" / "migrations"), "gt_core/project/migrations"),
+    ],
     # 显式收集 rpc 子模块（__main__ 通过函数引用间接 import，防止 tree-shaking 漏掉）
     hiddenimports=[
         "gt_core.rpc.server",
         "gt_core.rpc.methods",
         "gt_core.rpc.errors",
+        "gt_core.providers",
+        "gt_core.translate",
     ],
     hookspath=[],
     runtime_hooks=[],
