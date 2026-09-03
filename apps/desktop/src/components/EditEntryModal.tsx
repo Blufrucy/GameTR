@@ -27,10 +27,19 @@ export function EditEntryModal({
   }, [entry]);
 
   async function handleSave() {
+    // 守卫：空译文 / 未修改不保存（否则空译文落库 + 状态紊乱，待译/已改错乱）
+    if (!text.trim()) {
+      setErr("译文不能为空");
+      return;
+    }
+    if (text === (entry.translation ?? "")) {
+      setErr("译文未修改，无需保存");
+      return;
+    }
     setSaving(true);
     setErr(null);
     try {
-      // 状态机逐级推进：PENDING→MACHINE→EDITED（编辑译文 = 人工 = EDITED）
+      // 状态机逐级推进：PENDING→MACHINE→EDITED（人工编辑 = EDITED）
       if (entry.status === 1) {
         await rpc("entries.update", { id: entry.id, status: 2 });
       }

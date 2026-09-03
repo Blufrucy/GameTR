@@ -290,7 +290,7 @@ function TranslateView() {
 }
 
 export default function App() {
-  const { view, loadProviders, setTranslateProgress } = useApp();
+  const { view, loadProviders, setTranslateProgress, importProgress } = useApp();
   const [apiOpen, setApiOpen] = useState(false);
 
   // 启动即订阅通知（防丢）+ 加载 Provider
@@ -329,6 +329,27 @@ export default function App() {
       </div>
       <StatusBar />
       <ApiKeyModal open={apiOpen} onClose={() => setApiOpen(false)} />
+
+      {/* 导入进度覆盖层 */}
+      {importProgress && (
+        <div style={{
+          position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 200,
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <div style={{
+            background: "#1c1c1f", border: "1px solid #3a3a40", borderRadius: 10,
+            padding: "24px 32px", width: 340, textAlign: "center",
+          }}>
+            <h3 style={{ margin: "0 0 16px", fontSize: 14 }}>导入游戏</h3>
+            <div className="progress-track">
+              <div className="progress-fill" style={{ width: `${importProgress.pct}%` }} />
+            </div>
+            <p style={{ margin: "10px 0 0", fontSize: 12, color: "#8a8a92" }}>
+              {importProgress.phase}
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

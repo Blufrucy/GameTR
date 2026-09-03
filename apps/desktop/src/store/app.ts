@@ -65,6 +65,7 @@ interface AppState {
   view: View;
   statusMessage: string | null;
   busy: boolean;
+  importProgress: { phase: string; pct: number } | null; // 导入阶段进度（覆盖层显示）
 
   // actions
   loadProviders: () => Promise<void>;
@@ -79,6 +80,7 @@ interface AppState {
   loadEntries: () => Promise<void>;
   startTranslate: () => Promise<void>;
   writeBack: (outputDir: string) => Promise<void>;
+  setImportProgress: (p: { phase: string; pct: number } | null) => void;
   retranslateMismatched: () => Promise<void>;
   exportTranslations: () => Promise<void>;
   importTranslations: () => Promise<void>;
@@ -126,6 +128,7 @@ export const useApp = create<AppState>((set, get) => ({
   view: "home",
   statusMessage: null,
   busy: false,
+  importProgress: null,
 
   loadProviders: async () => {
     set({ providerLoading: true });
@@ -158,7 +161,7 @@ export const useApp = create<AppState>((set, get) => ({
   setBusy: (busy) => set({ busy }),
 
   importGame: async (dir, engineId) => {
-    set({ busy: true, statusMessage: "创建项目并提取文本…" });
+    set({ busy: true, importProgress: { phase: "创建项目", pct: 20 } });
     try {
       const projPath = await projectPathFor(dir);
       // 重导复用已有项目（open），否则 create
@@ -167,16 +170,22 @@ export const useApp = create<AppState>((set, get) => ({
       } catch {
         await rpc("project.create", { path: projPath, engine_id: engineId, source_path: dir });
       }
+      set({ importProgress: { phase: "提取游戏文本", pct: 50 } });
       const extract = await rpc<{ extracted_count: number }>("extract.run");
-      set({ projectPath: projPath, sourcePath: dir, engineId, projectState: "extracted" });
+      set({
+        projectPath: projPath, sourcePath: dir, engineId, projectState: "extracted",
+        importProgress: { phase: `加载 ${extract.extracted_count} 条文本`, pct: 80 },
+      });
       await get().loadEntries();
-      set({ view: "editor", statusMessage: `提取到 ${extract.extracted_count} 条文本` });
+      set({ view: "editor", statusMessage: `提取到 ${extract.extracted_count} 条文本`, importProgress: null });
     } catch (err) {
-      set({ statusMessage: `导入失败: ${err}` });
+      set({ statusMessage: `导入失败: ${err}`, importProgress: null });
     } finally {
       set({ busy: false });
     }
   },
+
+  setImportProgress: (importProgress) => set({ importProgress }),
 
   loadEntries: async () => {
     if (!get().projectPath) return;

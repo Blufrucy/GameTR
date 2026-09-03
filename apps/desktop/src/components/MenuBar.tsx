@@ -15,7 +15,7 @@ interface PluginInfo { engine_id: string; display_name: string; loaded: boolean;
 export function MenuBar() {
   const {
     setStatus, setBusy, projectPath, importGame,
-    exportTranslations, importTranslations,
+    exportTranslations, importTranslations, setImportProgress,
   } = useApp();
   const [importing, setImporting] = useState(false);
   const [dir, setDir] = useState<string | null>(null);
@@ -31,6 +31,7 @@ export function MenuBar() {
       if (typeof picked !== "string") return;
       setDir(picked);
       setBusy(true);
+      setImportProgress({ phase: "检测游戏引擎…", pct: 5 });
       let detected: string | null = null;
       try {
         const d = await rpc<DetectResult>("detect.run", { dir: picked });
@@ -40,6 +41,7 @@ export function MenuBar() {
       setEngines(plugins.filter((p) => p.loaded));
       setSelected(detected ?? plugins[0]?.engine_id ?? null);
       setBusy(false);
+      setImportProgress(null); // 弹窗由用户确认，确认后 importGame 接管进度
       setWizardOpen(true);
     } catch (err) {
       setBusy(false);
