@@ -25,6 +25,8 @@ class MockProvider:
     async def translate_batch(
         self, batch: list[TranslateItem], *, model: str | None = None,
         api_key: str | None = None, glossary: str | None = None,
+        few_shot: list[tuple[str, str]] | None = None,
+        speaker: str | None = None,
     ) -> list[TranslateResult]:
         # 确定性：前缀标记 + 原文（占位符 ⟦n⟧ 原样保留）
         # 轻量 sleep 模拟处理延迟（可配），默认 0 保证验收吞吐

@@ -397,20 +397,24 @@ def register_core_methods() -> MethodRegistry:
             raise RpcError(RpcErrorCode.PROJECT_ERROR, "没有可翻译条目（scope 内已全部翻译/已确认）")
         glossary_entries = project.repo.glossary_list()
         glossary_text = format_glossary(glossary_entries)
+        glossary_version = _glossary_version(glossary_entries)
         task_store = TaskStore(project.conn)
         model = params.get("model") or provider.models[0]
         task = task_store.create(
             provider_id=params["provider_id"], model=model,
             style_id=params.get("style_id"),
-            glossary_version=_glossary_version(glossary_entries),
+            glossary_version=glossary_version,
             total=len(entries),
         )
         api_key = _provider_manager().resolve_api_key(params["provider_id"])
         protector = _plugin_manager().get_protector(info.engine_id)
+        # 缓存 scope=(provider, model, 术语版本)：同条件重跑复用上次译文（翻译记忆）；
+        # 断点续翻/重复文本零成本。术语表/模型/提示词变了 → key 变 → 自动重新翻译
+        cache_scope = (params["provider_id"], model, glossary_version)
         asyncio.get_running_loop().create_task(run_translate_task(
             task_id=task.task_id, task_store=task_store, project=project,
             entries=entries, provider=provider, model=model, api_key=api_key,
-            glossary=glossary_text, protector=protector,
+            glossary=glossary_text, protector=protector, cache_scope=cache_scope,
             notify=ctx.get("notify", lambda _rec: None),
         ))
         return _dump(task)
@@ -539,10 +543,12 @@ def register_core_methods() -> MethodRegistry:
         )
         api_key = _provider_manager().resolve_api_key(provider_id)
         protector = _plugin_manager().get_protector(info.engine_id)
+        # 重翻（行数不匹配等）必须绕过缓存——缓存命中会原样返回上次的坏译文，
+        # 等于白翻一遍。translate.start 正常路径才启用缓存
         asyncio.get_running_loop().create_task(run_translate_task(
             task_id=task.task_id, task_store=task_store, project=project,
             entries=entries, provider=provider, model=model, api_key=api_key,
-            glossary=glossary_text, protector=protector,
+            glossary=glossary_text, protector=protector, cache_scope=None,
             notify=ctx.get("notify", lambda _rec: None),
         ))
         return {"task_id": task.task_id}

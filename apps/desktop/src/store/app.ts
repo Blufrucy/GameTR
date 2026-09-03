@@ -80,6 +80,9 @@ interface AppState {
   // 翻译
   translateTask: TranslateTaskInfo | null;
 
+  // 勾选（翻译范围）：片段级 Set；文件全选 = 该文件所有片段都勾选（三态在 UI 派生）
+  selectedIds: ReadonlySet<string>;
+
   // UI
   statusMessage: string | null;
   busy: boolean;
@@ -89,9 +92,14 @@ interface AppState {
   loadProviders: () => Promise<void>;
   setProvider: (id: string) => void;
   setModel: (model: string) => void;
+  enableEngine: (providerId: string, model: string) => void; // CC-switch 式「启用某服务某模型」
   setApiKey: (providerId: string, key: string) => void;
   setStatus: (msg: string | null) => void;
   setBusy: (busy: boolean) => void;
+  toggleEntry: (id: string) => void; // 勾/取消勾一个片段
+  setFileSelection: (file: string, selected: boolean) => void; // 勾/取消勾整个文件
+  setVisibleSelection: (ids: readonly string[], selected: boolean) => void; // 表头勾/取消勾当前筛选
+  clearSelection: () => void;
 
   importGame: (dir: string, engineId: string) => Promise<void>;
   loadEntries: () => Promise<void>;
@@ -139,6 +147,7 @@ export const useApp = create<AppState>((set, get) => ({
   statusFilter: null,
 
   translateTask: null,
+  selectedIds: new Set<string>(),
 
   statusMessage: null,
   busy: false,
@@ -175,6 +184,12 @@ export const useApp = create<AppState>((set, get) => ({
     set({ selectedProvider: id, selectedModel: p?.models[0] ?? null });
   },
   setModel: (model) => set({ selectedModel: model }),
+  // CC-switch 式启用：一次置 provider+model（翻译/重译真正用它），并回显
+  enableEngine: (providerId, model) => {
+    const p = get().providers.find((x) => x.provider_id === providerId);
+    set({ selectedProvider: providerId, selectedModel: model });
+    if (p) set({ statusMessage: `翻译引擎：${p.display_name} · ${model}` });
+  },
   setApiKey: (providerId, key) => {
     const next = { ...get().apiKeys, [providerId]: key };
     localStorage.setItem(API_KEYS_STORAGE, JSON.stringify(next));
@@ -183,8 +198,30 @@ export const useApp = create<AppState>((set, get) => ({
   setStatus: (statusMessage) => set({ statusMessage }),
   setBusy: (busy) => set({ busy }),
 
+  // ---- 勾选（翻译范围，Set 每次整换触发响应） ----
+  clearSelection: () => set({ selectedIds: new Set<string>() }),
+  toggleEntry: (id) => {
+    const next = new Set(get().selectedIds);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    set({ selectedIds: next });
+  },
+  setFileSelection: (file, selected) => {
+    const next = new Set(get().selectedIds);
+    for (const e of get().entries) {
+      if (e.file_path !== file) continue;
+      if (selected) next.add(e.id); else next.delete(e.id);
+    }
+    set({ selectedIds: next });
+  },
+  setVisibleSelection: (ids, selected) => {
+    const next = new Set(get().selectedIds);
+    if (selected) { for (const id of ids) next.add(id); }
+    else { for (const id of ids) next.delete(id); }
+    set({ selectedIds: next });
+  },
+
   importGame: async (dir, engineId) => {
-    set({ busy: true, importProgress: { phase: "创建项目", pct: 20 } });
+    set({ busy: true, importProgress: { phase: "创建项目", pct: 20 }, selectedIds: new Set<string>() });
     try {
       const projPath = await projectPathFor(dir);
       // 重导复用已有项目（open），否则 create
@@ -252,9 +289,13 @@ export const useApp = create<AppState>((set, get) => ({
     if (!selectedProvider) { set({ statusMessage: "请先在「模型 API」添加并选择 Provider" }); return; }
     set({ statusMessage: "启动翻译…" });
     try {
-      const task = await rpc<{ task_id: string; total: number }>("translate.start", {
-        scope: "all", provider_id: selectedProvider,
-      });
+      // 勾选了片段 → 只翻所选（后端 scope=selection 仅取其中「未翻译+非已确认」条目）；
+      // 没勾选 → 保持默认全量（断点续翻：只翻还没译的）
+      const selected = get().selectedIds;
+      const task = await rpc<{ task_id: string; total: number }>("translate.start", selected.size > 0
+        ? { scope: "selection", ids: [...selected], provider_id: selectedProvider, model: get().selectedModel ?? undefined }
+        : { scope: "all", provider_id: selectedProvider, model: get().selectedModel ?? undefined },
+      );
       set({ translateTask: { task_id: task.task_id, status: "running", done: 0, total: task.total },
             statusMessage: `翻译任务已启动（共 ${task.total} 条）` });
     } catch (err) {

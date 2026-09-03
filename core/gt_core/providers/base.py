@@ -45,10 +45,15 @@ class TranslationProvider(Protocol):
     async def translate_batch(
         self, batch: list[TranslateItem], *, model: str | None = None,
         api_key: str | None = None, glossary: str | None = None,
+        few_shot: list[tuple[str, str]] | None = None,
+        speaker: str | None = None,
     ) -> list[TranslateResult]:
         """翻译一批（并发控制/重试/限速在实现内部或 transport 层）。
 
         glossary：格式化术语表段落（GlossaryInjector 产出），注入 system prompt。
+        few_shot：同文件已确认译文示例（[(原文, 译文)]），注入 prompt 帮模型把握术语/
+        语气（译文一致性靠它，成本 = 每批多几十 token 输入）。
+        speaker：批的说话人/角色名（如 RPGMV 101 头像名），注入 prompt 让称呼语气贴合角色。
         """
         ...
 

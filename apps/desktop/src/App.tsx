@@ -14,6 +14,7 @@ import { TranslateModal } from "./components/TranslateModal";
 import { VirtualTable } from "./components/VirtualTable";
 import { WritebackModal } from "./components/WritebackModal";
 import { Button } from "./components/ui";
+import { TriCheck, type TriValue } from "./components/Checkbox";
 import { ensureSubscribed, onNotification, type RpcNotification } from "./rpc/client";
 import { matchStatus, useApp, type EntryRow } from "./store/app";
 import "./App.css";
@@ -28,16 +29,49 @@ function statusInfo(e: EntryRow): { label: string; cls: string } {
 }
 
 function Editor() {
-  const { entries, entriesLoading, fileFilter, statusFilter, setFileFilter, setStatusFilter } = useApp();
+  const {
+    entries, entriesLoading, fileFilter, statusFilter, setFileFilter, setStatusFilter,
+    selectedIds, toggleEntry, setVisibleSelection,
+  } = useApp();
   const [editing, setEditing] = useState<EntryRow | null>(null);
-  const visible = entries.filter((e) => {
-    if (fileFilter && e.file_path !== fileFilter) return false;
-    if (statusFilter !== null && !matchStatus(e, statusFilter)) return false;
-    return true;
-  });
+  const visible = useMemo(
+    () => entries.filter((e) => {
+      if (fileFilter && e.file_path !== fileFilter) return false;
+      if (statusFilter !== null && !matchStatus(e, statusFilter)) return false;
+      return true;
+    }),
+    [entries, fileFilter, statusFilter],
+  );
+  const visibleIds = useMemo(() => visible.map((e) => e.id), [visible]);
+  // 表头三态：当前筛选下全部勾选=2 / 部分=1 / 未勾=0
+  const visSel: TriValue = useMemo(() => {
+    let n = 0;
+    for (const id of visibleIds) if (selectedIds.has(id)) n += 1;
+    if (n === 0) return 0;
+    return n === visibleIds.length ? 2 : 1;
+  }, [visibleIds, selectedIds]);
 
   const columns = useMemo<ColumnDef<EntryRow, unknown>[]>(
     () => [
+      {
+        id: "select",
+        size: 34,
+        header: () => (
+          <TriCheck
+            value={visibleIds.length === 0 ? 0 : visSel}
+            onChange={() => setVisibleSelection(visibleIds, visSel !== 2)}
+            disabled={visibleIds.length === 0}
+            title={visSel === 2 ? "取消全选当前筛选" : "全选当前筛选"}
+          />
+        ),
+        cell: (info) => (
+          <TriCheck
+            value={selectedIds.has(info.row.original.id) ? 2 : 0}
+            onChange={() => toggleEntry(info.row.original.id)}
+            title="勾选：把这条片段纳入翻译范围（也可在左侧勾整个文件）"
+          />
+        ),
+      },
       {
         id: "status",
         header: "状态",
@@ -69,7 +103,8 @@ function Editor() {
         cell: (info) => <span className="cell-loc">{info.row.original.file_path}</span>,
       },
     ],
-    [],
+    // 勾选状态变化要反映到行勾选框 → 选中集/可见范围进依赖，重建表（虚拟化只渲可见行，开销可控）
+    [selectedIds, visSel, visibleIds, toggleEntry, setVisibleSelection],
   );
 
   if (entriesLoading && entries.length === 0) {
@@ -152,7 +187,7 @@ export default function App() {
           <Editor />
         </main>
       </div>
-      <StatusBar />
+      <StatusBar onOpenApi={() => setApiOpen(true)} />
 
       <TranslateModal open={translateOpen} onClose={() => setTranslateOpen(false)} />
       <WritebackModal open={writebackOpen} onClose={() => setWritebackOpen(false)} />

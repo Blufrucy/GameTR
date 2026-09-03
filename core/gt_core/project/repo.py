@@ -404,6 +404,30 @@ class Repo:
             cur = self._conn.execute("DELETE FROM glossary WHERE term = ?", (term,))
         return cur.rowcount
 
+    # ---------- translate_cache（翻译记忆，M1 建表 M4 启用） ----------
+
+    def translation_cache_get(self, cache_key: str) -> str | None:
+        """取缓存译文。key 由流水线组装（provider+model+术语版本+prompt 版本+source），
+        语义条件变（换模型/改术语/改提示词）→ key 变 → 自然失效。返回**已还原**的译文。"""
+        row = self._conn.execute(
+            "SELECT result FROM translate_cache WHERE cache_key = ?", (cache_key,)
+        ).fetchone()
+        return row["result"] if row is not None else None
+
+    def translation_cache_put(self, *, cache_key: str, source: str, result: str,
+                              provider_id: str, model: str) -> None:
+        """写缓存（同 key 覆盖刷新时间）。source/provider 留作诊断/统计，不进 key。"""
+        with self._conn:
+            self._conn.execute(
+                """
+                INSERT INTO translate_cache(cache_key, source, result, provider_id, model, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(cache_key) DO UPDATE SET
+                  result = excluded.result, created_at = excluded.created_at
+                """,
+                (cache_key, source, result, provider_id, model, time.time()),
+            )
+
     # ---------- stats ----------
 
     def stats(self) -> ProjectStats:

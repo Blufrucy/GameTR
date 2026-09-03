@@ -45,8 +45,13 @@ async def run_translate_task(
     glossary: str | None,
     protector: Any,
     notify: NotifyFn,
+    cache_scope: tuple[str, str, str] | None = None,
 ) -> None:
-    """后台翻译任务。任务态驱动：running 推进，paused/cancelled 批边界停止。"""
+    """后台翻译任务。任务态驱动：running 推进，paused/cancelled 批边界停止。
+
+    cache_scope=(provider_id, model, glossary_version)：启用翻译缓存；重翻场景传 None
+    （retranslate 要重新生成，缓存命中会返回上次的坏译文，见 translate_entries 文档）。
+    """
 
     def should_cancel() -> bool:
         return not task_store.is_running(task_id)
@@ -65,7 +70,7 @@ async def run_translate_task(
             project=project, entries=entries, provider=provider,
             model=model, api_key=api_key, glossary=glossary,
             protector=protector, notify=on_progress, should_cancel=should_cancel,
-            on_usage=on_usage,
+            on_usage=on_usage, cache_scope=cache_scope,
         )
         print(f"[task {task_id}] done translated={translated}", file=sys.stderr, flush=True)
         task = task_store.get(task_id)

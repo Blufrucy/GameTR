@@ -108,7 +108,9 @@ class OpenAICompatibleProvider:
 
     # ---------- 请求 ----------
 
-    def _system_prompt(self, glossary: str | None) -> str:
+    def _system_prompt(self, glossary: str | None,
+                       few_shot: list[tuple[str, str]] | None,
+                       speaker: str | None) -> str:
         system = (
             "你是游戏本地化译者，把文本翻译成简体中文。"
             "要求：符合角色语气，口语自然，术语一致。"
@@ -117,6 +119,15 @@ class OpenAICompatibleProvider:
         )
         if glossary:
             system += f"\n术语表（必须优先采用）：\n{glossary}"
+        if few_shot:
+            # 同文件已确认译文示例：帮模型把握术语与语气（译文一致性）。数量少（≤2）
+            # 且与待译同文件——提示词成本可忽略，收益是风格稳定。
+            system += "\n风格参考（同游戏已确认译文，据此保持术语与语气一致，勿照抄到无关文本）："
+            for s, t in few_shot:
+                system += f"\n{s} → {t}"
+        if speaker:
+            # RPGMV 101 头像名等：让称呼、口吻贴合说话人
+            system += f"\n当前文本出自角色「{speaker}」之口，按其身份/语气翻译。"
         system += (
             "\n文本中的 ⟦数字⟧ 是占位符，必须原样保留（数量、顺序、编号都不能变），不得翻译、删除或改动。"
             "响应中的 id 必须与请求中的 id 完全一致，不得修改或重命名。"
@@ -125,11 +136,13 @@ class OpenAICompatibleProvider:
         return system
 
     def _payload(self, batch: list[TranslateItem], model: str,
-                 glossary: str | None = None, *, structured: bool = False) -> dict[str, Any]:
+                 glossary: str | None = None,
+                 few_shot: list[tuple[str, str]] | None = None,
+                 speaker: str | None = None, *, structured: bool = False) -> dict[str, Any]:
         body: dict[str, Any] = {
             "model": model,
             "messages": [
-                {"role": "system", "content": self._system_prompt(glossary)},
+                {"role": "system", "content": self._system_prompt(glossary, few_shot, speaker)},
                 {"role": "user", "content": json.dumps(
                     {"items": [{"id": i.id, "text": i.text} for i in batch]}, ensure_ascii=False
                 )},
@@ -171,7 +184,16 @@ class OpenAICompatibleProvider:
                     # 鉴权/余额：不重试（重试无意义），清晰报错（API 没钱场景）
                     raise ProviderAuthError(resp.status_code)
                 if resp.status_code in (429, 500, 502, 503, 504) and attempt < _MAX_RETRIES:
-                    await asyncio.sleep(_BASE_DELAY * (2 ** attempt))
+                    # 429 = 限流排队（不是失败）：尊重 Retry-After，等待后重试而不是丢批；
+                    # 上限 60s 防服务端给极端值拖死单批
+                    delay = _BASE_DELAY * (2 ** attempt)
+                    retry_after = resp.headers.get("retry-after")
+                    if retry_after is not None:
+                        try:
+                            delay = max(delay, min(float(retry_after), 60.0))
+                        except ValueError:
+                            pass
+                    await asyncio.sleep(delay)
                     continue
                 resp.raise_for_status()
                 body = resp.json()
@@ -220,6 +242,8 @@ class OpenAICompatibleProvider:
     async def translate_batch(
         self, batch: list[TranslateItem], *, model: str | None = None,
         api_key: str | None = None, glossary: str | None = None,
+        few_shot: list[tuple[str, str]] | None = None,
+        speaker: str | None = None,
     ) -> list[TranslateResult]:
         if not batch:
             return []
@@ -230,7 +254,8 @@ class OpenAICompatibleProvider:
         # 端点不支持（DeepSeek 等）时降级 json_object
         body = None
         for structured in (True, False):
-            payload = self._payload(batch, model, glossary=glossary, structured=structured)
+            payload = self._payload(batch, model, glossary=glossary,
+                                    few_shot=few_shot, speaker=speaker, structured=structured)
             try:
                 body = await self._post(payload, api_key)
                 break

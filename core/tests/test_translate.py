@@ -1,12 +1,14 @@
-"""翻译流水线单测（M3）：ContextBatcher 分组、占位符阶段、pipeline 集成。"""
+"""翻译流水线单测（M3/M4）：ContextBatcher 分组、占位符阶段、pipeline 集成、缓存与去重。"""
 
 from __future__ import annotations
 
 import asyncio
 import json
+from typing import Any
 
 from gt_core.ir import entry_id
 from gt_core.project import Project
+from gt_core.providers.base import TranslateResult
 from gt_core.providers.mock import MockProvider
 from gt_core.rpc.models import Entry, EntryStatus
 from gt_core.translate.batcher import make_batches
@@ -130,3 +132,136 @@ def test_translate_entries_skips_confirmed(tmp_path):
     assert confirmed.translation == "人工确认译文"  # 未被 Mock 覆盖
     assert confirmed.status == EntryStatus.CONFIRMED
     assert project.repo.get(entries[1].id).translation == "【译】HP回復"
+
+
+# ---------- 同源去重 + 翻译缓存 + few-shot（M4 提速/提质） ----------
+
+class SpyProvider:
+    """记录每次 translate_batch 的参数（few_shot/speaker/ids），确定性回译。"""
+
+    provider_id = "spy"
+    display_name = "Spy（记录参数）"
+    models = ["spy-v1"]
+    needs_api_key = False
+    supports_structured = False
+    base_url: str | None = None
+
+    def __init__(self) -> None:
+        self.calls: list[dict[str, Any]] = []
+
+    async def translate_batch(
+        self, batch: list, *, model: str | None = None, api_key: str | None = None,
+        glossary: str | None = None, few_shot: list[tuple[str, str]] | None = None,
+        speaker: str | None = None,
+    ) -> list[TranslateResult]:
+        self.calls.append({
+            "model": model, "glossary": glossary,
+            "few_shot": few_shot, "speaker": speaker,
+            "ids": [i.id for i in batch],
+        })
+        return [
+            TranslateResult(id=i.id, translation=f"【译】{i.text}",
+                            tokens_in=max(1, len(i.text)), tokens_out=1)
+            for i in batch
+        ]
+
+    async def test(self, *, model: str | None = None,
+                   api_key: str | None = None) -> tuple[bool, float, str]:
+        return True, 0.0, "ok"
+
+    async def list_models(self, api_key: str | None = None) -> list[str]:
+        return ["spy-v1"]
+
+
+def test_dedupe_identical_sources_calls_api_once(tmp_path):
+    """同源条目（游戏重复台词/物品说明）只请求一次，译文复制到组内每条。"""
+    project = Project.create(tmp_path / "p.sqlite3", engine_id="rpgmv", source_path="x")
+    entries = [_entry(0, "はーい"), _entry(1, "はーい")]
+    project.repo.upsert_entries(entries)
+    spy = SpyProvider()
+
+    translated, warns = asyncio.run(translate_entries(
+        project=project, entries=entries, provider=spy,
+        model="spy-v1", api_key=None,
+    ))
+    assert translated == 2 and warns == []
+    assert len(spy.calls) == 1  # 同源两组实为一条请求
+    for e in entries:
+        assert project.repo.get(e.id).translation == "【译】はーい"
+
+
+def test_cache_hit_reuses_and_skips_api(tmp_path):
+    """翻译记忆：同 (provider, 模型, 术语版本, 原文) 第二次翻译直接复用，0 请求。"""
+    project = Project.create(tmp_path / "p.sqlite3", engine_id="rpgmv", source_path="x")
+    scope = ("spy", "spy-v1", "v1")
+    src = "アイテムの説明"
+    e1 = _entry(0, src)
+    project.repo.upsert_entries([e1])
+
+    spy1 = SpyProvider()
+    t1, w1 = asyncio.run(translate_entries(
+        project=project, entries=[e1], provider=spy1,
+        model="spy-v1", api_key=None, cache_scope=scope,
+    ))
+    assert t1 == 1 and w1 == [] and len(spy1.calls) == 1
+
+    # 同原文的新条目（断点续翻/重跑场景）→ 缓存命中，不再调 API
+    e2 = _entry(1, src)
+    project.repo.upsert_entries([e2])
+    spy2 = SpyProvider()
+    t2, w2 = asyncio.run(translate_entries(
+        project=project, entries=[e2], provider=spy2,
+        model="spy-v1", api_key=None, cache_scope=scope,
+    ))
+    assert t2 == 1 and w2 == [] and len(spy2.calls) == 0
+    assert project.repo.get(e2.id).translation == project.repo.get(e1.id).translation
+
+
+def test_cache_misses_when_scope_changes(tmp_path):
+    """缓存条件变化（换模型/改术语表）→ key 变 → 必须重新翻译（旧译文语义失效）。"""
+    project = Project.create(tmp_path / "p.sqlite3", engine_id="rpgmv", source_path="x")
+    src = "アイテムの説明"
+
+    e1 = _entry(0, src)
+    project.repo.upsert_entries([e1])
+    spy1 = SpyProvider()
+    asyncio.run(translate_entries(
+        project=project, entries=[e1], provider=spy1,
+        model="spy-v1", api_key=None, cache_scope=("spy", "spy-v1", "v1"),
+    ))
+    e2 = _entry(1, src)
+    project.repo.upsert_entries([e2])
+    spy2 = SpyProvider()
+    # 术语表版本变了（v1 → v2）→ 旧缓存不可用，重新翻译
+    asyncio.run(translate_entries(
+        project=project, entries=[e2], provider=spy2,
+        model="spy-v1", api_key=None, cache_scope=("spy", "spy-v1", "v2"),
+    ))
+    assert len(spy2.calls) == 1
+
+
+def test_few_shot_and_speaker_reach_provider(tmp_path):
+    """同文件已确认译文 → few_shot；说话人随批传给 provider（译文一致性）。"""
+    project = Project.create(tmp_path / "p.sqlite3", engine_id="rpgmv", source_path="x")
+    # 种子：同文件一条已确认译文（few-shot 来源）
+    c = _entry(9, "グッズ", fp="Map003.json")
+    project.repo.upsert_entries([c])
+    for s in (EntryStatus.MACHINE, EntryStatus.EDITED, EntryStatus.CONFIRMED):
+        project.repo.update(c.id, status=s)
+    project.repo.update(c.id, translation="礼物")
+    # 目标条目：带说话人、同文件
+    ctx = {"file_path": "Map003.json", "order": 0, "speaker": "町人"}
+    e = Entry(
+        id=entry_id("rpgmv", "locX", "もう一度来てね"), source="もう一度来てね",
+        translation=None, status=EntryStatus.PENDING, locator="locX",
+        context_json=json.dumps(ctx, ensure_ascii=False), updated_at=0.0,
+    )
+    project.repo.upsert_entries([e])
+    spy = SpyProvider()
+
+    translated, warns = asyncio.run(translate_entries(
+        project=project, entries=[e], provider=spy, model="spy-v1", api_key=None,
+    ))
+    assert translated == 1 and warns == []
+    assert spy.calls[0]["few_shot"] == [("グッズ", "礼物")]
+    assert spy.calls[0]["speaker"] == "町人"
