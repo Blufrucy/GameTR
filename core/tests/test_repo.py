@@ -236,7 +236,7 @@ class TestPersistReopen:
     def test_info_metadata(self, project):
         info = project.info()
         assert info.engine_id == "rpgmv"
-        assert info.schema_version == 2
+        assert info.schema_version == 4
         assert info.project_state.value == "created"
 
     def test_create_existing_raises(self, project):
@@ -246,3 +246,81 @@ class TestPersistReopen:
     def test_open_missing_raises(self, tmp_path):
         with pytest.raises(FileNotFoundError):
             Project.open(tmp_path / "missing.sqlite3")
+
+
+class TestMachineBaseline:
+    """M4 机翻基线（machine_text）：AI 落库即记基线；人改只动 translation 不动基线；
+    机翻·已改可恢复；清空回待译基线一并清掉。"""
+
+    def _seed_pending(self, project, eid: str) -> Entry:
+        project.repo.upsert_entries([Entry(
+            id=eid, source="勇者 こんにちは", translation=None,
+            status=EntryStatus.PENDING, locator="loc:x",
+            context_json='{"file_path": "Map001.json"}', updated_at=0.0,
+        )])
+        return project.repo.get(eid)
+
+    def test_machine_write_records_baseline(self, project):
+        eid = entry_id("rpgmv", "loc:x", "勇者 こんにちは")
+        self._seed_pending(project, eid)
+        # AI 落库（upsert_translations，等价流水线 Persister）
+        project.repo.upsert_translations([Entry(
+            id=eid, source="勇者 こんにちは", translation="勇者，你好",
+            status=EntryStatus.MACHINE, locator="loc:x",
+            context_json='{"file_path": "Map001.json"}', updated_at=1.0,
+        )])
+        got = project.repo.get(eid)
+        assert got.translation == "勇者，你好"
+        assert got.machine_text == "勇者，你好"  # 基线 = AI 输出
+
+    def test_human_edit_keeps_baseline_and_revert(self, project):
+        eid = entry_id("rpgmv", "loc:x", "勇者 こんにちは")
+        self._seed_pending(project, eid)
+        project.repo.upsert_translations([Entry(
+            id=eid, source="勇者 こんにちは", translation="勇者，你好",
+            status=EntryStatus.MACHINE, locator="loc:x",
+            context_json='{"file_path": "Map001.json"}', updated_at=1.0,
+        )])
+        # 人工编辑：translation 变了，基线保留
+        edited = project.repo.update(eid, translation="勇者，嗨！", edited=1)
+        assert edited.translation == "勇者，嗨！"
+        assert edited.edited == 1
+        assert edited.machine_text == "勇者，你好"
+        # 恢复机翻：translation 回到基线 + edited 归 0
+        reverted = project.repo.update(eid, translation=edited.machine_text, edited=0)
+        assert reverted.translation == "勇者，你好"
+        assert reverted.edited == 0
+        assert reverted.machine_text == "勇者，你好"
+
+    def test_clear_translation_goes_pending_and_drops_baseline(self, project):
+        eid = entry_id("rpgmv", "loc:x", "勇者 こんにちは")
+        self._seed_pending(project, eid)
+        project.repo.upsert_translations([Entry(
+            id=eid, source="勇者 こんにちは", translation="勇者，你好",
+            status=EntryStatus.MACHINE, locator="loc:x",
+            context_json='{"file_path": "Map001.json"}', updated_at=1.0,
+        )])
+        cleared = project.repo.update(eid, translation=None, status=EntryStatus.PENDING,
+                                     edited=0)
+        assert cleared.translation is None
+        assert cleared.status is EntryStatus.PENDING
+        assert cleared.machine_text is None  # 无译文就无基线（避免陈旧 AI 原文残留）
+
+    def test_clear_legacy_edited_entry_goes_pending(self, project):
+        """旧版已改条目（状态 3 EDITED，M4 机翻基线改造前落库）清空也应回待译。
+
+        （用户实测 bug：2→1 放行后已改译文清空仍报「非法状态迁移: 3 -> 1」）
+        """
+        eid = entry_id("rpgmv", "loc:x", "勇者 こんにちは")
+        self._seed_pending(project, eid)
+        project.repo.upsert_translations([Entry(
+            id=eid, source="勇者 こんにちは", translation="勇者，你好",
+            status=EntryStatus.EDITED, locator="loc:x",
+            context_json='{"file_path": "Map001.json"}', updated_at=1.0,
+        )])
+        cleared = project.repo.update(eid, translation=None, status=EntryStatus.PENDING,
+                                     edited=0)
+        assert cleared.translation is None
+        assert cleared.status is EntryStatus.PENDING
+        assert cleared.machine_text is None
+

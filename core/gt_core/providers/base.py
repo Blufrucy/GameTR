@@ -54,7 +54,12 @@ class TranslationProvider(Protocol):
 
     async def test(self, *, model: str | None = None,
                    api_key: str | None = None) -> tuple[bool, float, str]:
-        """连通性自检：返回 (ok, latency_ms, message)。"""
+        """连通性自检：返回 (ok, latency_ms, message)。
+
+        语义 = 网络可达性 ping：只做 TCP/TLS 握手（毫秒级），**不发起 HTTP/生成请求**——
+        HTTP 响应要等服务端处理，慢服务端会把连通性误报成几秒（不是网络问题）。
+        也不验证 key / 不拉模型列表（那归 list_models，UI 分步调）。key 可为空。
+        """
         ...
 
     async def list_models(self, api_key: str | None = None) -> list[str]:

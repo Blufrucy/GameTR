@@ -82,6 +82,18 @@ class Entry(BaseModel):
     source: str
     translation: str | None = None
     status: EntryStatus
+    edited: Annotated[
+        int | None,
+        Field(
+            description='人工修改标记（M4）：1=曾被人工编辑（与 status 正交——机翻条目改后 status 仍 2 但 edited=1，可同时被机翻与已修改筛选命中）'
+        ),
+    ] = 0
+    machine_text: Annotated[
+        str | None,
+        Field(
+            description='最近一次 AI 机翻输出（基线，M4）：人工编辑只改 translation，machine_text 保留 AI 原文——机翻·已改条目可查看/恢复机翻内容。纯机翻未改时等于 translation；从未机翻过为 null'
+        ),
+    ] = None
     locator: Annotated[str, Field(description='不透明定位串，插件负责生成与解析')]
     context_json: Annotated[str | None, Field(description='上下文元信息 JSON 串')] = (
         None

@@ -42,7 +42,7 @@ def test_project_create_returns_info(reg, ctx, tmp_path):
     assert resp["id"] == 1
     info = resp["result"]
     assert info["engine_id"] == "rpgmv"
-    assert info["schema_version"] == 2
+    assert info["schema_version"] == 4
     assert info["project_state"] == "created"
 
 

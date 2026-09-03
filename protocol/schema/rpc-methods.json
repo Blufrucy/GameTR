@@ -92,13 +92,14 @@
     },
     {
       "name": "entries.update",
-      "summary": "更新单条译文/状态",
+      "summary": "更新单条译文/状态/人工标记",
       "params": {
         "type": "object",
         "properties": {
           "id": { "type": "string" },
           "translation": { "type": ["string", "null"] },
-          "status": { "$ref": "common.json#/definitions/EntryStatus" }
+          "status": { "$ref": "common.json#/definitions/EntryStatus" },
+          "edited": { "type": "integer", "description": "M4 人工修改标记（0/1，与 status 正交）" }
         },
         "required": ["id"]
       },
@@ -299,13 +300,14 @@
     },
     {
       "name": "providers.test",
-      "summary": "Provider 连通性自检（密钥可选覆盖，仅此方法允许带 api_key）",
+      "summary": "Provider 连通性自检（零推理：GET /models 测端点可达+key 有效，不发生成请求；密钥可选覆盖，仅此方法允许带 api_key）",
       "params": {
         "type": "object",
         "properties": {
           "provider_id": { "type": "string" },
           "model": { "type": "string" },
-          "api_key": { "type": "string", "description": "可选覆盖；规范路径是环境变量注入" }
+          "api_key": { "type": "string", "description": "可选覆盖；规范路径是环境变量注入" },
+          "base_url": { "type": "string", "description": "可选；传入=测试未保存的临时配置（UI 保存前）" }
         },
         "required": ["provider_id"]
       },
@@ -336,7 +338,8 @@
         "type": "object",
         "properties": {
           "provider_id": { "type": "string" },
-          "api_key": { "type": "string", "description": "可选覆盖" }
+          "api_key": { "type": "string", "description": "可选覆盖；本地端点可留空" },
+          "base_url": { "type": "string", "description": "可选；传入=用临时配置拉模型（UI 保存前）" }
         },
         "required": ["provider_id"]
       },
@@ -345,6 +348,25 @@
         "properties": {
           "provider_id": { "type": "string" },
           "models": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "milestone": "M4"
+    },
+    {
+      "name": "providers.remove",
+      "summary": "删除用户 Provider（模型 API 面板「删除」；不存在幂等返回 removed=false）",
+      "params": {
+        "type": "object",
+        "properties": {
+          "provider_id": { "type": "string" }
+        },
+        "required": ["provider_id"]
+      },
+      "result": {
+        "type": "object",
+        "properties": {
+          "provider_id": { "type": "string" },
+          "removed": { "type": "boolean" }
         }
       },
       "milestone": "M4"

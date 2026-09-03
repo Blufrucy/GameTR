@@ -56,6 +56,7 @@ from gt_core.rpc.params import (
     ProjectOpenParams,
     ProviderConfigureParams,
     ProviderModelsParams,
+    ProviderRemoveParams,
     ProviderTestParams,
     TranslateExportParams,
     TranslateImportParams,
@@ -199,6 +200,7 @@ def register_core_methods() -> MethodRegistry:
                 params["id"],
                 translation=params.get("translation", _UNSET),
                 status=params.get("status", _UNSET),
+                edited=params.get("edited", _UNSET),
             )
         except InvalidStateTransition as exc:
             raise RpcError(RpcErrorCode.PROJECT_ERROR, str(exc)) from exc
@@ -364,6 +366,16 @@ def register_core_methods() -> MethodRegistry:
             raise RpcError(RpcErrorCode.PROVIDER_ERROR, f"获取模型失败: {exc}") from exc
         return {"provider_id": params["provider_id"], "models": models}
 
+    @reg.register("providers.remove", ProviderRemoveParams)
+    def providers_remove(params: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
+        """删除用户 Provider（模型 API 面板「删除」；不存在也幂等返回 removed=false）。"""
+        mgr = _provider_manager()
+        try:
+            removed = mgr.remove(params["provider_id"])
+        except Exception as exc:  # noqa: BLE001 — 删除失败映射为 Provider 错误
+            raise RpcError(RpcErrorCode.PROVIDER_ERROR, f"删除失败: {exc}") from exc
+        return {"provider_id": params["provider_id"], "removed": removed}
+
     # ---------- M3：translate（任务管理） ----------
 
     @reg.register("translate.start", TranslateStartParams)
@@ -489,7 +501,12 @@ def register_core_methods() -> MethodRegistry:
                 warnings.append(f"{locator}: 原文与导入文件不一致，译文按当前项目写入")
             # 待译→机翻；已改/已确认保持（不覆盖人工状态）
             new_status = EntryStatus.MACHINE if entry.status == EntryStatus.PENDING else entry.status
-            repo.update(entry.id, translation=translation, status=new_status)
+            # 导入译文视同机翻源：非已确认条目把基线置为导入译文（之后人工编辑仍可
+            # 查看/恢复到它）；已确认条目不碰基线（不可回退到待译，保留原基线无意义）
+            params2 = {"translation": translation, "status": new_status}
+            if entry.status != EntryStatus.CONFIRMED:
+                params2["machine_text"] = translation
+            repo.update(entry.id, **params2)
             imported += 1
         return {"imported": imported, "skipped": skipped, "warnings": warnings}
 

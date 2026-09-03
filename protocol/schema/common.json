@@ -163,6 +163,18 @@
         "status": {
           "$ref": "#/definitions/EntryStatus"
         },
+        "edited": {
+          "type": "integer",
+          "default": 0,
+          "description": "人工修改标记（M4）：1=曾被人工编辑（与 status 正交——机翻条目改后 status 仍 2 但 edited=1，可同时被机翻与已修改筛选命中）"
+        },
+        "machine_text": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "最近一次 AI 机翻输出（基线，M4）：人工编辑只改 translation，machine_text 保留 AI 原文——机翻·已改条目可查看/恢复机翻内容。纯机翻未改时等于 translation；从未机翻过为 null"
+        },
         "locator": {
           "type": "string",
           "description": "不透明定位串，插件负责生成与解析"

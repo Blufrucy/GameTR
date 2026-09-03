@@ -20,8 +20,10 @@ from __future__ import annotations
 
 import asyncio
 import json
+import ssl
 import time
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 
@@ -33,6 +35,13 @@ _BASE_DELAY = 1.0
 # 响应解析重试：模型偶发返回空/非 JSON content（DeepSeek 限流实测坑），
 # 指数退避重新请求（2s/4s/8s 给限流恢复时间）而非直接失败
 _PARSE_RETRY = 3
+
+# 连通性超时（connect 5s / read 15s）：仅供拉模型列表等真实 HTTP 请求
+_PROBE_TIMEOUT = httpx.Timeout(15.0, connect=5.0)
+
+# 连通性 ping 总超时：只做 TCP/TLS 握手（零 HTTP 往返），4s 内必须见分晓——
+# 慢服务端（第三方中转常见）的响应延迟不属于「连通性」，不该拖慢检查
+_PING_TIMEOUT = 4.0
 
 # structured outputs 的 JSON Schema（strict 子集：顶层 object、全字段 required、无 additionalProperties）
 _TRANSLATIONS_SCHEMA: dict[str, Any] = {
@@ -259,56 +268,106 @@ class OpenAICompatibleProvider:
             ))
         return results
 
+    async def _http_get_json(self, url: str,
+                             headers: dict[str, str]) -> tuple[int | None, dict[str, Any] | None, str]:
+        """GET 并解析 JSON → (status, data, transport_err)。不抛网络异常，调用方分类。
+
+        供 /models 列表拉取。传输层错误（DNS/拒连/超时/代理）吞成 transport_err
+        （status=None）；HTTP 层错误保留 status 让调用方映射人话。
+        """
+        try:
+            async with httpx.AsyncClient(timeout=_PROBE_TIMEOUT) as client:
+                resp = await client.get(url, headers=headers)
+        except httpx.TimeoutException:
+            return None, None, "连接超时"
+        except httpx.TransportError as exc:
+            return None, None, f"网络错误: {type(exc).__name__}: {exc}"
+        try:
+            data = resp.json()
+        except ValueError:
+            data = None
+        return resp.status_code, data if isinstance(data, dict) else None, ""
+
+    @staticmethod
+    def _probe_status_message(status: int) -> str:
+        """HTTP 状态码 → 用户能看懂的原因（/models 拉取错误专用，不重试）。"""
+        if status == 401:
+            return "API key 无效或缺失（HTTP 401）"
+        if status == 402:
+            return "API 余额不足，请充值后重试（HTTP 402）"
+        if status == 403:
+            return "无权限访问，可能余额不足或账户受限（HTTP 403）"
+        if status in (404, 405):
+            return "该地址未提供 /models 端点（HTTP 404）。base_url 需指向 OpenAI 兼容端点，" \
+                   "多数服务以 /v1 结尾，如 https://api.openai.com/v1"
+        return f"HTTP {status}"
+
+    @staticmethod
+    def _endpoint(url: str) -> tuple[str, int, bool]:
+        """从 base_url 解析 (host, port, use_tls)。port 取显式端口否则按协议默认。"""
+        u = urlparse(url)
+        if u.scheme not in ("http", "https"):
+            raise ValueError(f"只支持 http/https，收到: {u.scheme!r}")
+        if not u.hostname:
+            raise ValueError("地址缺少主机名")
+        tls = u.scheme == "https"
+        port = u.port or (443 if tls else 80)
+        return u.hostname, port, tls
+
+    async def _connect(self, host: str, port: int, use_tls: bool) -> None:
+        """TCP(+TLS) 握手即返回。happy_eyeballs 并行尝试 v4/v6，避免单栈悬挂。
+
+        只做传输层握手、不发任何 HTTP——连通性的定义是「网络通到服务端」，
+        服务端处理请求快慢（中转/生成）是另一回事，不在这里度量。
+        """
+        ctx = ssl.create_default_context() if use_tls else None
+        _, writer = await asyncio.open_connection(
+            host, port, ssl=ctx, happy_eyeballs_delay=0.25
+        )
+        writer.close()
+        try:
+            await writer.wait_closed()
+        except Exception:  # noqa: BLE001 — 关闭异常不影响「已连通」结论
+            pass
+
     async def test(self, *, model: str | None = None,
                    api_key: str | None = None) -> tuple[bool, float, str]:
-        """连通性自检：验证「能拿到翻译」即可，不依赖 id 严格匹配。
+        """连通性自检（毫秒级 ping）：只做 TCP/TLS 握手，验证「网络通到服务端」。
 
-        （模型对单条 probe 请求偶发改 id，测试连接目的是连通性而非数据完整性；
-        流水线 translate_batch 仍严格按 id 校验，失败重试。）
+        旧实现发完整 HTTP 请求（先是 chat 生成、后是 GET /models）——都要等服务端
+        回应，慢服务端（第三方中转常见，实测 ~9s）就把「连通性」拖到 9s。真正的连通
+        检查像 ping：握手成功即通，不验证 key、不拉模型（那属于另一路 RPC）。
         """
-        if not api_key:
-            return False, 0.0, "缺 api_key（环境变量注入）"
+        if self.base_url is None:
+            return False, 0.0, "未配置 API 地址（base_url）"
+        try:
+            host, port, tls = self._endpoint(self.base_url)
+        except ValueError as exc:
+            return False, 0.0, f"API 地址无效（{self.base_url}）: {exc}"
         t0 = time.monotonic()
         try:
-            use_model = model or (
-                self.models[0] if self.models and self.models[0] != "default" else None
-            )
-            if not use_model:
-                # 无有效模型（临时配置未选模型）：拉 /models 用第一个探测
-                try:
-                    fetched = await self.list_models(api_key=api_key)
-                    use_model = fetched[0] if fetched else None
-                except Exception:  # noqa: BLE001 — /models 拉不到也继续走 chat 探测
-                    use_model = None
-            if not use_model:
-                ms = (time.monotonic() - t0) * 1000.0
-                return False, ms, "未找到可用模型（先获取模型，或检查 API 地址 /models 端点）"
-            payload = self._payload(
-                [TranslateItem(id="probe", text="こんにちは")], use_model
-            )
-            body = await self._post(payload, api_key)
-            content = body["choices"][0]["message"]["content"]
-            parsed = self._parse_translations(content)
-            ms = (time.monotonic() - t0) * 1000.0
-            if not parsed or not parsed[0].get("translation"):
-                return False, ms, f"响应无翻译条目: {content[:120]}"
-            return True, ms, "ok"
-        except Exception as exc:  # noqa: BLE001 — 自检失败返回信息而非抛
-            return False, (time.monotonic() - t0) * 1000.0, f"{type(exc).__name__}: {exc}"
+            await asyncio.wait_for(self._connect(host, port, tls), timeout=_PING_TIMEOUT)
+        except TimeoutError:
+            return False, _PING_TIMEOUT * 1000.0, f"连接超时（>{_PING_TIMEOUT:.0f}s）：{host}:{port}"
+        except ssl.SSLCertVerificationError as exc:
+            return False, (time.monotonic() - t0) * 1000.0, \
+                f"TLS 证书校验失败：{host}（{exc.verify_message}）"
+        except OSError as exc:
+            return False, (time.monotonic() - t0) * 1000.0, f"无法连接 {host}:{port}: {exc}"
+        ms = (time.monotonic() - t0) * 1000.0
+        return True, ms, "ok"
 
     async def list_models(self, api_key: str | None = None) -> list[str]:
         """获取模型列表：GET {base_url}/models（OpenAI 兼容标准端点）。
 
-        供「添加 API → 获取模型 → 选择模型」流程自动填充模型下拉。
+        供「添加 API → 测试并获取模型」自动填充模型下拉。key 可空：本地端点
+        （Ollama/LM Studio）无需鉴权。
         """
-        if not api_key:
-            raise ValueError(f"{self.provider_id} 需要 api_key")
         url = f"{self.base_url}/models"
-        headers = {"Authorization": f"Bearer {api_key}"}
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.get(url, headers=headers)
-            resp.raise_for_status()
-            data = resp.json()
-        assert isinstance(data, dict)
-        raw = data.get("data", [])
-        return [m["id"] for m in raw if isinstance(m, dict) and m.get("id")]
+        headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+        status, data, err = await self._http_get_json(url, headers)
+        if status is None:
+            raise RuntimeError(f"获取模型失败: {err}")
+        if status != 200 or not isinstance(data, dict):
+            raise RuntimeError(f"获取模型失败: {self._probe_status_message(status)}")
+        return [m["id"] for m in data.get("data", []) if isinstance(m, dict) and m.get("id")]

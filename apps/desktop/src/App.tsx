@@ -1,35 +1,38 @@
 /**
- * GameTR 桌面应用主界面（M4）。
- *
- * 布局：顶部工具栏（导入/翻译/回写/模型API）→ 侧边栏 + 主体（编辑器/翻译）→ 状态栏。
- * 导入 → extract → 编辑器显示真实条目；翻译 → translate.start → progress 通知 → 刷新。
+ * GameTR 主界面（M4 重构）：主界面 = 编辑器（校对文本的地方）。
+ * 翻译 / 回写 / 模型 API 都是「按钮 → 弹窗 → 确认」操作，不占独立视图。
  */
 
 import { useEffect, useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { ApiKeyModal } from "./components/ApiKeyModal";
-import { ActivityBar } from "./components/ActivityBar";
 import { EditEntryModal } from "./components/EditEntryModal";
 import { MenuBar } from "./components/MenuBar";
 import { Sidebar } from "./components/Sidebar";
 import { StatusBar } from "./components/StatusBar";
+import { TranslateModal } from "./components/TranslateModal";
 import { VirtualTable } from "./components/VirtualTable";
-import { ensureSubscribed, onNotification, type RpcNotification } from "./rpc/client";
-import { useApp, type EntryRow } from "./store/app";
+import { WritebackModal } from "./components/WritebackModal";
 import { Button } from "./components/ui";
+import { ensureSubscribed, onNotification, type RpcNotification } from "./rpc/client";
+import { matchStatus, useApp, type EntryRow } from "./store/app";
 import "./App.css";
 
-const STATUS_LABEL: Record<number, string> = { 1: "待译", 2: "机翻", 3: "已改", 4: "已确认" };
-const STATUS_CLASS: Record<number, string> = {
-  1: "status-pending", 2: "status-machine", 3: "status-edited", 4: "status-confirmed",
-};
+/** 状态单元格显示（M4：edited 与 status 正交——机翻条目改后显示"机翻·已改"两状态）。 */
+function statusInfo(e: EntryRow): { label: string; cls: string } {
+  if (e.status === 1) return { label: "待译", cls: "status-pending" };
+  if (e.status === 4) return { label: "已确认", cls: "status-confirmed" };
+  if (e.edited === 1) return { label: e.status === 2 ? "机翻·已改" : "已修改", cls: "status-edited" };
+  if (e.status === 2) return { label: "机翻", cls: "status-machine" };
+  return { label: "已修改", cls: "status-edited" }; // 历史 status3 等
+}
 
 function Editor() {
   const { entries, entriesLoading, fileFilter, statusFilter, setFileFilter, setStatusFilter } = useApp();
   const [editing, setEditing] = useState<EntryRow | null>(null);
   const visible = entries.filter((e) => {
     if (fileFilter && e.file_path !== fileFilter) return false;
-    if (statusFilter !== null && e.status !== statusFilter) return false;
+    if (statusFilter !== null && !matchStatus(e, statusFilter)) return false;
     return true;
   });
 
@@ -38,12 +41,11 @@ function Editor() {
       {
         id: "status",
         header: "状态",
-        size: 56,
-        cell: (info) => (
-          <span className={`status ${STATUS_CLASS[info.row.original.status] ?? "status-pending"}`}>
-            {STATUS_LABEL[info.row.original.status] ?? "?"}
-          </span>
-        ),
+        size: 70,
+        cell: (info) => {
+          const s = statusInfo(info.row.original);
+          return <span className={`status ${s.cls}`}>{s.label}</span>;
+        },
       },
       {
         id: "source",
@@ -76,8 +78,8 @@ function Editor() {
   if (entries.length === 0) {
     return (
       <div className="view-placeholder">
-        <h2>编辑器</h2>
-        <p>点击「导入游戏」选择游戏文件夹开始。</p>
+        <h2>翻译编辑器</h2>
+        <p>点菜单栏「导入游戏」开始。</p>
       </div>
     );
   }
@@ -115,189 +117,17 @@ function Editor() {
   );
 }
 
-function WritebackView() {
-  const { sourcePath, writeBack, writeBackResult, setView, entries, retranslateMismatched } = useApp();
-  const [outDir, setOutDir] = useState(sourcePath ? `${sourcePath}_zh` : "");
-  const [showDetail, setShowDetail] = useState(false);
-  // 行数不匹配：译文换行数与原文不一致（回写保留原文）
-  const mismatchedCount = useMemo(
-    () => entries.filter(
-      (e) => e.translation && e.source.split("\n").length !== e.translation.split("\n").length
-    ).length,
-    [entries],
-  );
-  const warningList = writeBackResult?.message ? writeBackResult.message.split("; ").filter(Boolean) : [];
-
-  return (
-    <div className="view-placeholder">
-      <h2>回写</h2>
-      <p>把译文写入游戏副本（原游戏不受影响）。输出目录已自动建议为源游戏旁的新文件夹，可修改。</p>
-      <div style={{ display: "flex", gap: 8, marginTop: 14, width: 480 }}>
-        <input
-          value={outDir}
-          onChange={(e) => setOutDir(e.target.value)}
-          style={{
-            flex: 1, background: "#1c1c1f", color: "#e6e6e8", border: "1px solid #3a3a40",
-            borderRadius: 6, padding: "6px 10px", fontSize: 13,
-          }}
-        />
-        <Button variant="primary" onClick={() => writeBack(outDir)}>
-          开始回写
-        </Button>
-      </div>
-
-      {writeBackResult && (
-        <div style={{ marginTop: 16, textAlign: "center" }}>
-          <p style={{ color: "#34c759" }}>{writeBackResult.written_count} 条译文已写入</p>
-          {writeBackResult.warning_count > 0 && (
-            <>
-              <p style={{ color: "#ff9f0a" }}>
-                {writeBackResult.warning_count} 条警告（已保留原文）
-              </p>
-              {warningList.length > 0 && (
-                <>
-                  <p style={{ fontSize: 12, color: "#8a8a92", maxWidth: 520 }}>
-                    {warningList.slice(0, 3).join("；")}
-                  </p>
-                  {warningList.length > 3 && (
-                    <button
-                      onClick={() => setShowDetail(!showDetail)}
-                      style={{
-                        background: "none", border: "none", color: "#4da3ff",
-                        fontSize: 12, cursor: "pointer", marginTop: 4,
-                      }}
-                    >
-                      {showDetail ? "收起" : `展开全部 ${warningList.length} 条`}
-                    </button>
-                  )}
-                  {showDetail && (
-                    <p style={{ fontSize: 11, color: "#6a6a70", maxWidth: 600, wordBreak: "break-all", whiteSpace: "pre-wrap" }}>
-                      {warningList.join("；")}
-                    </p>
-                  )}
-                </>
-              )}
-            </>
-          )}
-          <p style={{ fontSize: 12, color: "#8a8a92" }}>输出目录：{writeBackResult.output_dir}</p>
-        </div>
-      )}
-
-      {mismatchedCount > 0 && (
-        <div style={{ marginTop: 14, textAlign: "center" }}>
-          <p style={{ color: "#ff9f0a", fontSize: 13 }}>
-            {mismatchedCount} 条行数不匹配（原文/译文换行数不一致）
-          </p>
-          <Button onClick={() => retranslateMismatched()}>
-            重新翻译这 {mismatchedCount} 条
-          </Button>
-        </div>
-      )}
-
-      <p style={{ marginTop: 8, fontSize: 12, color: "#5a5a60" }}>
-        建议：回写后去输出目录启动游戏，验证译文生效。
-      </p>
-      <div style={{ marginTop: 12 }}>
-        <Button variant="ghost" onClick={() => setView("editor")}>
-          返回编辑器
-        </Button>
-      </div>
-    </div>
-  );
-}
-function TranslateView() {
-  const { translateTask, statusMessage, setView, entries, retranslateMismatched, startTranslate } = useApp();
-  // 行数不匹配：译文换行数与原文不一致（AI 合并行，回写会跳过保留原文）
-  const mismatchedCount = useMemo(
-    () => entries.filter(
-      (e) => e.translation && e.source.split("\n").length !== e.translation.split("\n").length
-    ).length,
-    [entries],
-  );
-  // 待译：漏译/失败跳过未落库的条目（续翻会补）
-  const pendingCount = useMemo(() => entries.filter((e) => e.status === 1).length, [entries]);
-  if (!translateTask) {
-    return (
-      <div className="view-placeholder">
-        <h2>翻译</h2>
-        <p>启动 AI 翻译当前项目的文本。</p>
-        <div style={{ marginTop: 12 }}>
-          <Button variant="primary" onClick={() => startTranslate()}>
-            开始翻译
-          </Button>
-        </div>
-      </div>
-    );
-  }
-  const { done, total, status } = translateTask;
-  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
-  const label = status === "done" ? "翻译完成" : status === "error" ? "翻译出错" : "翻译中";
-
-  if (status === "error") {
-    return (
-      <div className="view-placeholder">
-        <h2>{label}</h2>
-        <p style={{ color: "#ff5b5b", maxWidth: 520, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
-          {statusMessage ?? "未知错误"}
-        </p>
-        <p style={{ color: "#8a8a92", fontSize: 12 }}>
-          {done} / {total} 条已完成（已完成的不受影响，重新翻译会跳过）
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="view-placeholder">
-      <h2>{label}</h2>
-      <div className="progress-track">
-        <div className="progress-fill" style={{ width: `${pct}%` }} />
-      </div>
-      <p>
-        {done} / {total} · {pct}%
-      </p>
-      {status === "done" ? (
-        <>
-          <p style={{ color: "#8a8a92", fontSize: 12 }}>译文已保存，可以回写到游戏。</p>
-          {mismatchedCount > 0 && (
-            <p style={{ color: "#ff9f0a", fontSize: 13 }}>
-              {mismatchedCount} 条行数不匹配（原文/译文换行数不一致，回写会保留原文）
-            </p>
-          )}
-          {pendingCount > 0 && (
-            <p style={{ color: "#ff9f0a", fontSize: 13 }}>
-              {pendingCount} 条仍待译（漏译/失败跳过），点「翻译」可补翻
-            </p>
-          )}
-          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-            {mismatchedCount > 0 && (
-              <Button onClick={() => retranslateMismatched()}>
-                重新翻译这 {mismatchedCount} 条
-              </Button>
-            )}
-            <Button variant="primary" onClick={() => setView("writeback")}>
-              回写译文到游戏
-            </Button>
-          </div>
-        </>
-      ) : (
-        <p style={{ color: "#8a8a92", fontSize: 12 }}>
-          正在请求翻译服务…（批量较大时单批约 10-60 秒；如遇限流会自动重试）
-        </p>
-      )}
-    </div>
-  );
-}
-
 export default function App() {
-  const { view, loadProviders, setTranslateProgress, importProgress } = useApp();
+  const { loadProviders, setTranslateProgress, importProgress } = useApp();
   const [apiOpen, setApiOpen] = useState(false);
+  const [translateOpen, setTranslateOpen] = useState(false);
+  const [writebackOpen, setWritebackOpen] = useState(false);
 
   // 启动即订阅通知（防丢）+ 加载 Provider
   useEffect(() => {
     ensureSubscribed();
     loadProviders().catch(() => {});
-    // progress 通知 → 翻译进度 + 完成后刷新条目
+    // progress 通知 → 翻译进度（状态栏）+ 完成后刷新
     return onNotification((n: RpcNotification) => {
       if (n.method !== "progress") return;
       const p = n.params as Record<string, unknown>;
@@ -311,23 +141,21 @@ export default function App() {
 
   return (
     <div className="app">
-      <MenuBar />
+      <MenuBar
+        onTranslate={() => setTranslateOpen(true)}
+        onWriteback={() => setWritebackOpen(true)}
+        onOpenApi={() => setApiOpen(true)}
+      />
       <div className="app-body" style={{ display: "flex", flex: 1, minHeight: 0 }}>
-        <ActivityBar onOpenApi={() => setApiOpen(true)} />
         <Sidebar />
         <main className="app-content" style={{ flex: 1, minWidth: 0, display: "flex" }}>
-          {view === "editor" && <Editor />}
-          {view === "translate" && <TranslateView />}
-          {view === "writeback" && <WritebackView />}
-          {view === "home" && (
-            <div className="view-placeholder">
-              <h2>欢迎</h2>
-              <p>点击「导入游戏」选择游戏文件夹开始。</p>
-            </div>
-          )}
+          <Editor />
         </main>
       </div>
       <StatusBar />
+
+      <TranslateModal open={translateOpen} onClose={() => setTranslateOpen(false)} />
+      <WritebackModal open={writebackOpen} onClose={() => setWritebackOpen(false)} />
       <ApiKeyModal open={apiOpen} onClose={() => setApiOpen(false)} />
 
       {/* 导入进度覆盖层 */}
@@ -335,14 +163,23 @@ export default function App() {
         <div style={{
           position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 200,
           display: "flex", alignItems: "center", justifyContent: "center",
+          padding: 16, boxSizing: "border-box",
         }}>
           <div style={{
             background: "#1c1c1f", border: "1px solid #3a3a40", borderRadius: 10,
-            padding: "24px 32px", width: 340, textAlign: "center",
+            padding: "24px 28px", width: "min(90vw, 360px)", textAlign: "center",
+            boxSizing: "border-box",
           }}>
             <h3 style={{ margin: "0 0 16px", fontSize: 14 }}>导入游戏</h3>
-            <div className="progress-track">
-              <div className="progress-fill" style={{ width: `${importProgress.pct}%` }} />
+            <div style={{
+              width: "100%", height: 8, background: "#26262a", borderRadius: 4,
+              overflow: "hidden",
+            }}>
+              <div style={{
+                height: "100%", width: `${importProgress.pct}%`,
+                background: "linear-gradient(90deg,#2d6cdf,#4da3ff)",
+                transition: "width 0.3s ease",
+              }} />
             </div>
             <p style={{ margin: "10px 0 0", fontSize: 12, color: "#8a8a92" }}>
               {importProgress.phase}

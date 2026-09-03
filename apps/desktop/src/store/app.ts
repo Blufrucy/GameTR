@@ -24,17 +24,40 @@ export interface EntryRow {
   source: string;
   translation: string | null;
   status: number;
+  edited: number; // 人工修改标记（M4：1=被人工编辑过，与 status 正交）
+  machine_text: string | null; // 最近一次机翻输出基线（机翻·已改可查看/恢复；纯机翻未改时=translation）
   locator: string;
   file_path: string;
 }
 
-export type View = "home" | "editor" | "translate" | "writeback";
+/** 状态筛选 key（M4：已修改=人工标记 edited，独立于机翻 status——机翻条目改后两筛都命中） */
+export type StatusKey = "pending" | "machine" | "edited" | "confirmed";
+
+export const STATUS_LABEL: Record<StatusKey, string> = {
+  pending: "待译", machine: "机翻", edited: "已修改", confirmed: "已确认",
+};
+
+export function matchStatus(e: EntryRow, key: StatusKey): boolean {
+  switch (key) {
+    case "pending": return e.status === 1;
+    case "machine": return e.status === 2;
+    case "edited": return e.edited === 1; // 人工动过（机翻改 / 待译填 / 确认过的都算）
+    case "confirmed": return e.status === 4;
+  }
+}
 
 export interface TranslateTaskInfo {
   task_id: string;
   status: string;
   done: number;
   total: number;
+}
+
+export interface WriteBackResult {
+  output_dir: string;
+  written_count: number;
+  warning_count: number;
+  message: string | null;
 }
 
 interface AppState {
@@ -46,23 +69,18 @@ interface AppState {
   apiKeys: Record<string, string>; // localStorage 持久化
 
   // 项目
-  projectState: string | null;
   projectPath: string | null;
   sourcePath: string | null; // 源游戏目录（回写建议输出目录用）
   engineId: string | null;
   entries: EntryRow[];
   entriesLoading: boolean;
   fileFilter: string | null;
-  statusFilter: number | null;
+  statusFilter: StatusKey | null;
 
   // 翻译
   translateTask: TranslateTaskInfo | null;
 
-  // 回写
-  writeBackResult: { output_dir: string; written_count: number; warning_count: number; message: string | null } | null;
-
   // UI
-  view: View;
   statusMessage: string | null;
   busy: boolean;
   importProgress: { phase: string; pct: number } | null; // 导入阶段进度（覆盖层显示）
@@ -72,21 +90,20 @@ interface AppState {
   setProvider: (id: string) => void;
   setModel: (model: string) => void;
   setApiKey: (providerId: string, key: string) => void;
-  setView: (v: View) => void;
   setStatus: (msg: string | null) => void;
   setBusy: (busy: boolean) => void;
 
   importGame: (dir: string, engineId: string) => Promise<void>;
   loadEntries: () => Promise<void>;
   startTranslate: () => Promise<void>;
-  writeBack: (outputDir: string) => Promise<void>;
+  writeBack: (outputDir: string) => Promise<WriteBackResult>;
   setImportProgress: (p: { phase: string; pct: number } | null) => void;
   retranslateMismatched: () => Promise<void>;
   exportTranslations: () => Promise<void>;
   importTranslations: () => Promise<void>;
   setTranslateProgress: (taskId: string, status: string, done: number, total: number, message?: string | null) => void;
   setFileFilter: (file: string | null) => void;
-  setStatusFilter: (status: number | null) => void;
+  setStatusFilter: (status: StatusKey | null) => void;
 }
 
 const API_KEYS_STORAGE = "gametr.api_keys";
@@ -113,7 +130,6 @@ export const useApp = create<AppState>((set, get) => ({
   selectedModel: null,
   apiKeys: loadKeys(),
 
-  projectState: null,
   projectPath: null,
   sourcePath: null,
   engineId: null,
@@ -123,9 +139,7 @@ export const useApp = create<AppState>((set, get) => ({
   statusFilter: null,
 
   translateTask: null,
-  writeBackResult: null,
 
-  view: "home",
   statusMessage: null,
   busy: false,
   importProgress: null,
@@ -134,11 +148,21 @@ export const useApp = create<AppState>((set, get) => ({
     set({ providerLoading: true });
     try {
       const providers = await rpc<ProviderInfo[]>("providers.list");
-      set((s) => ({
-        providers,
-        selectedProvider: s.selectedProvider ?? providers[0]?.provider_id ?? null,
-        selectedModel: s.selectedModel ?? providers[0]?.models[0] ?? null,
-      }));
+      set((s) => {
+        // 被删的 Provider 仍在选中（translate.start 会取不到）→ 回退到第一个可用
+        const keepId = s.selectedProvider && providers.some((p) => p.provider_id === s.selectedProvider)
+          ? s.selectedProvider : null;
+        const pid = keepId ?? providers[0]?.provider_id ?? null;
+        const p = providers.find((x) => x.provider_id === pid);
+        const keepModel = keepId === s.selectedProvider
+          && s.selectedModel && p?.models.includes(s.selectedModel)
+          ? s.selectedModel : null;
+        return {
+          providers,
+          selectedProvider: pid,
+          selectedModel: keepModel ?? p?.models[0] ?? null,
+        };
+      });
     } catch (err) {
       set({ statusMessage: `加载 Provider 失败: ${err}` });
     } finally {
@@ -156,7 +180,6 @@ export const useApp = create<AppState>((set, get) => ({
     localStorage.setItem(API_KEYS_STORAGE, JSON.stringify(next));
     set({ apiKeys: next });
   },
-  setView: (view) => set({ view }),
   setStatus: (statusMessage) => set({ statusMessage }),
   setBusy: (busy) => set({ busy }),
 
@@ -173,11 +196,11 @@ export const useApp = create<AppState>((set, get) => ({
       set({ importProgress: { phase: "提取游戏文本", pct: 50 } });
       const extract = await rpc<{ extracted_count: number }>("extract.run");
       set({
-        projectPath: projPath, sourcePath: dir, engineId, projectState: "extracted",
+        projectPath: projPath, sourcePath: dir, engineId,
         importProgress: { phase: `加载 ${extract.extracted_count} 条文本`, pct: 80 },
       });
       await get().loadEntries();
-      set({ view: "editor", statusMessage: `提取到 ${extract.extracted_count} 条文本`, importProgress: null });
+      set({ statusMessage: `提取到 ${extract.extracted_count} 条文本`, importProgress: null });
     } catch (err) {
       set({ statusMessage: `导入失败: ${err}`, importProgress: null });
     } finally {
@@ -205,7 +228,9 @@ export const useApp = create<AppState>((set, get) => ({
             return {
               id: String(e.id), source: String(e.source),
               translation: e.translation as string | null,
-              status: Number(e.status), locator: String(e.locator),
+              status: Number(e.status), edited: Number((e as { edited?: unknown }).edited ?? 0),
+              machine_text: (e.machine_text as string | null | undefined) ?? null,
+              locator: String(e.locator),
               file_path: ctx.file_path ?? "",
             };
           })
@@ -231,7 +256,7 @@ export const useApp = create<AppState>((set, get) => ({
         scope: "all", provider_id: selectedProvider,
       });
       set({ translateTask: { task_id: task.task_id, status: "running", done: 0, total: task.total },
-            view: "translate", statusMessage: `翻译任务已启动（共 ${task.total} 条）` });
+            statusMessage: `翻译任务已启动（共 ${task.total} 条）` });
     } catch (err) {
       set({ statusMessage: `翻译启动失败: ${err}` });
     }
@@ -248,27 +273,24 @@ export const useApp = create<AppState>((set, get) => ({
     }
   },
 
-  writeBack: async (outputDir) => {
+  writeBack: async (outputDir): Promise<WriteBackResult> => {
     const { projectPath } = get();
-    if (!projectPath) { set({ statusMessage: "请先导入游戏" }); return; }
+    if (!projectPath) throw new Error("请先导入游戏");
     const dir = outputDir.trim();
-    if (!dir) { set({ statusMessage: "请填写输出目录" }); return; }
+    if (!dir) throw new Error("请填写输出目录");
     set({ busy: true, statusMessage: "回写中…（拷贝游戏 + 写入译文）" });
     try {
-      const res = await rpc<{
-        output_dir: string; written_count: number; warning_count: number; message: string | null;
-      }>("write_back.run", { output_dir: dir });
-      set({
-        writeBackResult: res,
-        statusMessage: `回写完成：${res.written_count} 条译文，${res.warning_count} 条警告`,
-      });
+      const res = await rpc<WriteBackResult>("write_back.run", { output_dir: dir });
+      set({ statusMessage: `回写完成：${res.written_count} 条译文，${res.warning_count} 条警告` });
+      return res;
     } catch (err) {
       const msg = String(err);
       // 校验失败：给出人话提示（输出目录不能是源游戏目录）
       const friendly = msg.includes("源目录内")
-        ? "输出目录不能是源游戏目录或其子目录（会破坏原游戏）。已建议独立的「源目录_zh」，请确认或修改后重试。"
+        ? "输出目录不能是源游戏目录或其子目录（会破坏原游戏）。请改为独立的输出目录（如「源目录_zh」）。"
         : `回写失败: ${msg}`;
       set({ statusMessage: friendly });
+      throw new Error(friendly);
     } finally {
       set({ busy: false });
     }
@@ -294,7 +316,6 @@ export const useApp = create<AppState>((set, get) => ({
       // 后台任务：立即返回 task_id，progress 通知驱动进度与完成刷新（App 订阅）
       set({
         translateTask: { task_id: task.task_id, status: "running", done: 0, total: mismatched.length },
-        view: "translate",
         statusMessage: `重新翻译 ${mismatched.length} 条（保持行数）…`,
       });
     } catch (err) {

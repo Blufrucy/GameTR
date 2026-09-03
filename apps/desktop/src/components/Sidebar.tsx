@@ -1,16 +1,13 @@
 /**
  * 侧边栏：文件树（按 file_path 分组，点击过滤编辑器）+ 状态筛选计数。
+ * 状态语义（M4）：待译=status1，机翻=status2，已修改=edited（人工标记），已确认=status4。
+ * 机翻条目人工改后 status 仍 2 但 edited=1 → 同时命中「机翻」「已修改」两筛选。
  */
 
 import { useMemo } from "react";
-import { useApp } from "../store/app";
+import { matchStatus, STATUS_LABEL, useApp, type StatusKey } from "../store/app";
 
-const STATUS_FILTERS = [
-  { key: 1, label: "待译" },
-  { key: 2, label: "机翻" },
-  { key: 3, label: "已改" },
-  { key: 4, label: "已确认" },
-];
+const STATUS_KEYS: StatusKey[] = ["pending", "machine", "edited", "confirmed"];
 
 export function Sidebar() {
   const { entries, fileFilter, setFileFilter, statusFilter, setStatusFilter } = useApp();
@@ -24,18 +21,20 @@ export function Sidebar() {
     return [...m.entries()];
   }, [entries]);
 
-  // 状态计数
+  // 状态计数（用语义 matcher，非简单 status 数）
   const statusCounts = useMemo(() => {
-    const c: Record<number, number> = {};
-    for (const e of entries) c[e.status] = (c[e.status] ?? 0) + 1;
+    const c: Record<StatusKey, number> = { pending: 0, machine: 0, edited: 0, confirmed: 0 };
+    for (const e of entries) {
+      for (const k of STATUS_KEYS) if (matchStatus(e, k)) c[k] += 1;
+    }
     return c;
   }, [entries]);
 
   const total = entries.length;
 
   /** 点状态：若当前文件筛选下该状态为空 → 自动清除文件筛选（显示全局该状态，无需手动清）。 */
-  function handleStatusClick(key: number) {
-    if (fileFilter && !entries.some((e) => e.file_path === fileFilter && e.status === key)) {
+  function handleStatusClick(key: StatusKey) {
+    if (fileFilter && !entries.some((e) => e.file_path === fileFilter && matchStatus(e, key))) {
       setFileFilter(null);
     }
     setStatusFilter(key);
@@ -43,7 +42,7 @@ export function Sidebar() {
 
   /** 点文件：若该文件下当前状态为空 → 自动清除状态筛选。 */
   function handleFileClick(file: string) {
-    if (statusFilter !== null && !entries.some((e) => e.file_path === file && e.status === statusFilter)) {
+    if (statusFilter !== null && !entries.some((e) => e.file_path === file && matchStatus(e, statusFilter))) {
       setStatusFilter(null);
     }
     setFileFilter(file);
@@ -71,10 +70,7 @@ export function Sidebar() {
           <p style={{ margin: 0, fontSize: 12, color: "#5a5a60" }}>导入游戏后显示</p>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            <button
-              onClick={() => setFileFilter(null)}
-              style={fileBtn(fileFilter === null)}
-            >
+            <button onClick={() => setFileFilter(null)} style={fileBtn(fileFilter === null)}>
               全部（{total}）
             </button>
             {files.map(([file, count]) => (
@@ -101,15 +97,15 @@ export function Sidebar() {
             <span>全部</span>
             <span style={{ marginLeft: "auto", color: "#6a6a70", fontSize: 11 }}>{total}</span>
           </button>
-          {STATUS_FILTERS.map((f) => (
+          {STATUS_KEYS.map((k) => (
             <button
-              key={f.key}
-              onClick={() => handleStatusClick(f.key)}
-              style={fileBtn(statusFilter === f.key)}
+              key={k}
+              onClick={() => handleStatusClick(k)}
+              style={fileBtn(statusFilter === k)}
             >
-              <span>{f.label}</span>
+              <span>{STATUS_LABEL[k]}</span>
               <span style={{ marginLeft: "auto", color: "#6a6a70", fontSize: 11 }}>
-                {statusCounts[f.key] ?? 0}
+                {statusCounts[k]}
               </span>
             </button>
           ))}

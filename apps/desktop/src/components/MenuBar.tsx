@@ -12,7 +12,9 @@ import { Button, Modal } from "./ui";
 interface DetectResult { engine_id: string; display_name: string; }
 interface PluginInfo { engine_id: string; display_name: string; loaded: boolean; }
 
-export function MenuBar() {
+export function MenuBar({ onTranslate, onWriteback, onOpenApi }: {
+  onTranslate: () => void; onWriteback: () => void; onOpenApi: () => void;
+}) {
   const {
     setStatus, setBusy, projectPath, importGame,
     exportTranslations, importTranslations, setImportProgress,
@@ -70,6 +72,10 @@ export function MenuBar() {
       <Sep />
       <MenuBtn onClick={exportTranslations} disabled={!projectPath} title="导出译文，分享给同款游戏用户">导出翻译</MenuBtn>
       <MenuBtn onClick={importTranslations} disabled={!projectPath} title="导入同款游戏的译文，免重复翻译">导入翻译</MenuBtn>
+      <Sep />
+      <MenuBtn onClick={onTranslate} disabled={!projectPath} title="AI 翻译待译文本">翻译</MenuBtn>
+      <MenuBtn onClick={onWriteback} disabled={!projectPath} title="回写译文到游戏副本">回写</MenuBtn>
+      <MenuBtn onClick={onOpenApi} title="配置翻译服务（Provider/模型/API key）">模型 API</MenuBtn>
 
       {/* 游戏类型选择（导入后） */}
       <Modal open={wizardOpen} onClose={() => setWizardOpen(false)} title="选择游戏类型">

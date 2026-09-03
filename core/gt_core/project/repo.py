@@ -33,11 +33,17 @@ def _entry_to_row(e: Entry, now: float | None = None) -> tuple[Any, ...]:
         e.source,
         e.translation,
         int(e.status),
+        int(e.edited or 0),
+        e.machine_text,
         json.dumps([e.locator], ensure_ascii=False),
         e.context_json,
         e.warnings_json,
         ts,
     )
+
+
+# 行值元组里 machine_text 的序号（upsert_translations 把它覆写为 translation=AI 基线）
+_MACHINE_TEXT_IDX = 5
 
 
 def _row_to_entry(row: sqlite3.Row) -> Entry:
@@ -47,6 +53,8 @@ def _row_to_entry(row: sqlite3.Row) -> Entry:
         source=row["source"],
         translation=row["translation"],
         status=EntryStatus(row["status"]),
+        edited=int(row["edited"] or 0),
+        machine_text=row["machine_text"],
         locator=json.loads(row["locators_json"])[0],
         context_json=row["context_json"],
         warnings_json=row["warnings_json"],
@@ -72,13 +80,15 @@ class Repo:
         with self._conn:  # 整批一个事务
             self._conn.executemany(
                 """
-                INSERT INTO entries(id, source, translation, status, locators_json,
-                                    context_json, warnings_json, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO entries(id, source, translation, status, edited, machine_text,
+                                    locators_json, context_json, warnings_json, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                   source = excluded.source,
                   translation = excluded.translation,
                   status = excluded.status,
+                  edited = excluded.edited,
+                  machine_text = excluded.machine_text,
                   locators_json = excluded.locators_json,
                   context_json = excluded.context_json,
                   warnings_json = excluded.warnings_json,
@@ -99,9 +109,9 @@ class Repo:
         with self._conn:  # 整批一个事务
             self._conn.executemany(
                 """
-                INSERT INTO entries(id, source, translation, status, locators_json,
-                                    context_json, warnings_json, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO entries(id, source, translation, status, edited, machine_text,
+                                    locators_json, context_json, warnings_json, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                   source = excluded.source,
                   locators_json = excluded.locators_json,
@@ -129,15 +139,20 @@ class Repo:
         """
         guard = "" if overwrite_confirmed else "WHERE status != 4"
         rows = [_entry_to_row(e) for e in entries]
+        # 机翻落库即记基线：machine_text = 本次 AI 输出（人工改 translation 时不被覆盖，
+        # 供机翻·已改条目查看/恢复）。行元组按 _MACHINE_TEXT_IDX 就地覆写。
+        rows = [r[:_MACHINE_TEXT_IDX] + (r[2],) + r[_MACHINE_TEXT_IDX + 1:] for r in rows]
         with self._conn:  # 每批一个事务（流水线批边界）
             cur = self._conn.executemany(
                 f"""
-                INSERT INTO entries(id, source, translation, status, locators_json,
-                                    context_json, warnings_json, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO entries(id, source, translation, status, edited, machine_text,
+                                    locators_json, context_json, warnings_json, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                   translation = excluded.translation,
                   status = excluded.status,
+                  edited = excluded.edited,
+                  machine_text = excluded.translation,
                   warnings_json = excluded.warnings_json,
                   updated_at = excluded.updated_at
                 {guard}
@@ -198,34 +213,56 @@ class Repo:
         )
 
     def update(self, entry_id: str, *, translation: object = _UNSET,
-               status: object = _UNSET) -> Entry | None:
-        """单条更新译文/状态（单条一个事务）。
+               status: object = _UNSET, edited: object = _UNSET,
+               machine_text: object = _UNSET) -> Entry | None:
+        """单条更新译文/状态/人工标记（单条一个事务）。
 
-        - translation/status 传 _UNSET（默认）表示不改该字段
+        - translation/status/edited/machine_text 传 _UNSET（默认）表示不改该字段
         - translation 传 None 表示显式清空译文（协议允许 null）
         - status 迁移经状态机校验（非法迁移抛 InvalidStateTransition）
-        - 空操作（两字段都没传或值无变化）不刷新 updated_at（review 修复）
+        - edited=1：人工修改标记（M4，与 status 正交——机翻条目编辑后 status 保持
+          2 但 edited=1，可同时被机翻与已修改筛选命中）
+        - machine_text：机翻基线（后端 translate.import 置基线用；前端不走 RPC，
+          RPC entries.update 只改 translation/edited——基线天然保留）
+        - 空操作（字段都没传或值无变化）不刷新 updated_at（review 修复）
         """
         current = self.get(entry_id)
         if current is None:
             return None
-        if translation is _UNSET and status is _UNSET:
+        if (translation is _UNSET and status is _UNSET and edited is _UNSET
+                and machine_text is _UNSET):
             return current  # 纯 id 空操作：不动时间戳
         new_translation = current.translation if translation is _UNSET else translation
         new_status = current.status if status is _UNSET else status
+        new_edited = current.edited
+        if edited is not _UNSET:
+            if not isinstance(edited, int):
+                raise TypeError(f"非法 edited: {edited!r}")
+            new_edited = edited
+        new_machine_text = current.machine_text
+        if machine_text is not _UNSET:
+            if not isinstance(machine_text, str | None):
+                raise TypeError(f"非法 machine_text: {machine_text!r}")
+            new_machine_text = machine_text
+        # 整条译文被清空（回到待译）→ 基线一并清掉（无译文就无「机翻原文」可言）
+        if translation is not _UNSET and new_translation is None:
+            new_machine_text = None
         if not isinstance(new_translation, str | None) or not isinstance(new_status, EntryStatus):
             raise TypeError(f"非法更新参数: translation={new_translation!r}, status={new_status!r}")
         if status is not _UNSET and new_status != current.status:
             transition_entry(current.status, new_status)  # 非法迁移抛 InvalidStateTransition
-        if new_translation == current.translation and new_status == current.status:
+        if (new_translation == current.translation and new_status == current.status
+                and new_edited == current.edited and new_machine_text == current.machine_text):
             return current  # 值无实际变化：不刷 updated_at
         with self._conn:  # 单条一个事务（路线图纪律）
             self._conn.execute(
                 """
-                UPDATE entries SET translation = ?, status = ?, updated_at = ?
+                UPDATE entries SET translation = ?, status = ?, edited = ?,
+                                   machine_text = ?, updated_at = ?
                 WHERE id = ?
                 """,
-                (new_translation, int(new_status), time.time(), entry_id),
+                (new_translation, int(new_status), new_edited, new_machine_text,
+                 time.time(), entry_id),
             )
         return self.get(entry_id)
 

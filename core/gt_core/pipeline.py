@@ -47,12 +47,18 @@ _PROJECT_TRANSITIONS: frozenset[tuple[ProjectState, ProjectState]] = frozenset(
     }
 )
 
-# 条目状态机：逐级前进，不可回退（重翻走批量接口，跳过 CONFIRMED）
+# 条目状态机：正常逐级前进（PENDING→MACHINE→EDITED→CONFIRMED，不可回退）。
+# 例外：{MACHINE, EDITED}→PENDING（M4 人工「清空译文回到待译」）：编辑器里撤销
+# 整条译文是明确用户动作（等价批量重翻的 MACHINE→PENDING）。EDITED 需一并放行——
+# M4 机翻基线改造前落库的旧条目状态就是 3（EDITED），清空同样应回到待译。
+# CONFIRMED 仍不可回退。
 _ENTRY_TRANSITIONS: frozenset[tuple[EntryStatus, EntryStatus]] = frozenset(
     {
         (EntryStatus.PENDING, EntryStatus.MACHINE),
         (EntryStatus.MACHINE, EntryStatus.EDITED),
         (EntryStatus.EDITED, EntryStatus.CONFIRMED),
+        (EntryStatus.MACHINE, EntryStatus.PENDING),
+        (EntryStatus.EDITED, EntryStatus.PENDING),
     }
 )
 

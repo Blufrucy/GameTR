@@ -97,6 +97,15 @@ class ProviderManager:
         self._apply_config(cfg)
         return self._to_info(self.get(provider_id))
 
+    def remove(self, provider_id: str) -> bool:
+        """删除用户 Provider（内存 + 持久化）。返回是否曾存在（幂等删除）。"""
+        existed = provider_id in self._providers
+        configs = [c for c in _read_configs() if c.get("provider_id") != provider_id]
+        _write_configs(configs)
+        self._providers.pop(provider_id, None)
+        self._config_keys.pop(provider_id, None)
+        return existed
+
     def _apply_config(self, cfg: dict[str, Any]) -> None:
         """把一条用户配置应用到内存（Provider + key 缓存）。"""
         pid = cfg.get("provider_id")

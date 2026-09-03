@@ -60,6 +60,19 @@ class TestEntryStateMachine:
         with pytest.raises(InvalidStateTransition):
             transition_entry(EntryStatus.CONFIRMED, EntryStatus.EDITED)
 
+    def test_clear_to_pending_from_machine_and_edited(self):
+        # M4「清空译文回到待译」：机翻（2）与旧版已改条目（状态 3 EDITED）都能回待译
+        assert transition_entry(EntryStatus.MACHINE, EntryStatus.PENDING) is (
+            EntryStatus.PENDING
+        )
+        assert transition_entry(EntryStatus.EDITED, EntryStatus.PENDING) is (
+            EntryStatus.PENDING
+        )
+
+    def test_clear_confirmed_still_illegal(self):
+        with pytest.raises(InvalidStateTransition):
+            transition_entry(EntryStatus.CONFIRMED, EntryStatus.PENDING)
+
     def test_illegal_skip(self):
         with pytest.raises(InvalidStateTransition):
             transition_entry(EntryStatus.PENDING, EntryStatus.CONFIRMED)

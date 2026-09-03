@@ -61,6 +61,7 @@ class EntriesUpdateParams(BaseModel):
     id: str
     translation: str | None = None  # 显式 null = 清空译文（协议 ['string','null']）
     status: EntryStatus | None = None  # 仅作「未传」占位；显式 null 会被 validator 拒绝
+    edited: int | None = None  # M4 人工修改标记（1=人工编辑过；与 status 正交）
 
     @field_validator("status")
     @classmethod
@@ -71,6 +72,13 @@ class EntriesUpdateParams(BaseModel):
         """
         if v is None:
             raise ValueError("status 不可为 null（如需清空译文请用 translation=null）")
+        return v
+
+    @field_validator("edited")
+    @classmethod
+    def _edited_01(cls, v: int | None) -> int | None:
+        if v not in (None, 0, 1):
+            raise ValueError("edited 只能是 0 或 1")
         return v
 
 
@@ -131,6 +139,13 @@ class ProviderModelsParams(BaseModel):
     provider_id: str
     api_key: str | None = None
     base_url: str | None = None  # 传入 = 用临时配置拉模型（UI 保存前）
+
+
+class ProviderRemoveParams(BaseModel):
+    """providers.remove：删除用户 Provider（配置面板「删除」按钮）。"""
+
+    model_config = _STRICT
+    provider_id: str
 
 
 class ProviderConfigureParams(BaseModel):
